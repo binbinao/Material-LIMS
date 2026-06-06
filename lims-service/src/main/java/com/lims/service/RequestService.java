@@ -1,0 +1,359 @@
+package com.lims.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lims.common.exception.BusinessException;
+import com.lims.common.exception.ErrorCode;
+import com.lims.dao.mapper.*;
+import com.lims.model.dto.AnalysisTaskAssignDTO;
+import com.lims.model.dto.RequestCreateDTO;
+import com.lims.model.entity.*;
+import com.lims.model.enums.RequestStatus;
+import com.lims.workflow.WorkflowService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class RequestService {
+
+    private final RequestMapper requestMapper;
+    private final AnalysisTaskMapper analysisTaskMapper;
+    private final AnalysisItemMapper analysisItemMapper;
+    private final BrandMapper brandMapper;
+    private final RequestTypeMapper requestTypeMapper;
+    private final SysUserMapper sysUserMapper;
+    private final WorkflowService workflowService;
+    private final HolidayService holidayService;
+
+    @Transactional(rollbackFor = Exception.class)
+    public Request createRequest(RequestCreateDTO dto, String currentUserId) {
+        Request request = new Request();
+
+        // Generate request number: REQ-YYYY-NNNN
+        request.setRequestNo(generateRequestNo());
+
+        request.setBrandId(dto.getBrandId());
+        request.setDeptId(dto.getDeptId());
+        request.setTypeId(dto.getTypeId());
+        request.setRequesterId(currentUserId);
+
+        // Handle proxy request
+        if (Boolean.TRUE.equals(dto.getProxyRequest())) {
+            request.setProxyRequesterId(currentUserId);
+            request.setRealRequesterName(dto.getRealRequesterName());
+        }
+
+        // Part & Supplier info
+        request.setPartNumber(dto.getPartNumber());
+        request.setPartName(dto.getPartName());
+        request.setEco(dto.getEco());
+        request.setSupplierCode(dto.getSupplierCode());
+        request.setSupplierName(dto.getSupplierName());
+
+        request.setRequestReason(dto.getRequestReason());
+        request.setPriority(dto.getPriority() != null ? dto.getPriority() : "NORMAL");
+        request.setStatus(RequestStatus.DRAFT.getValue());
+
+        // Calculate due date via HolidayService (skips weekends + national/company holidays, cached per year)
+        RequestType requestType = requestTypeMapper.selectById(dto.getTypeId());
+        if (requestType != null && requestType.getTaskDurationDays() != null) {
+            request.setDueDate(holidayService.addBusinessDays(LocalDate.now(), requestType.getTaskDurationDays()));
+        }
+
+        requestMapper.insert(request);
+
+        // Create analysis tasks
+        if (dto.getAnalysisItemIds() != null) {
+            BigDecimal totalCost = BigDecimal.ZERO;
+            int sortOrder = 0;
+            for (String itemId : dto.getAnalysisItemIds()) {
+                AnalysisItem item = analysisItemMapper.selectById(itemId);
+                if (item != null) {
+                    AnalysisTask task = new AnalysisTask();
+                    task.setRequestId(request.getId());
+                    task.setItemId(itemId);
+                    task.setStatus("PENDING");
+                    task.setSortOrder(sortOrder++);
+                    analysisTaskMapper.insert(task);
+
+                    if (item.getCost() != null) {
+                        totalCost = totalCost.add(item.getCost());
+                    }
+                }
+            }
+            request.setTotalCost(totalCost);
+            requestMapper.updateById(request);
+        }
+
+        log.info("Created request: requestNo={}, requesterId={}", request.getRequestNo(), currentUserId);
+        return request;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void submitRequest(String requestId, String currentUserId) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        if (!RequestStatus.DRAFT.getValue().equals(request.getStatus())) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID);
+        }
+        if (!request.getRequesterId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
+        }
+
+        request.setStatus(RequestStatus.SUBMITTED.getValue());
+        request.setSubmittedAt(LocalDateTime.now());
+        requestMapper.updateById(request);
+
+        // Start Flowable workflow process
+        String processInstanceId = workflowService.startProcess(requestId, currentUserId);
+        request.setProcessInstanceId(processInstanceId);
+        requestMapper.updateById(request);
+
+        log.info("Submitted request and started workflow: requestNo={}, processInstanceId={}", request.getRequestNo(), processInstanceId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void assignRequest(String requestId, List<AnalysisTaskAssignDTO> assignments, String priority) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        if (!RequestStatus.SUBMITTED.getValue().equals(request.getStatus())) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID);
+        }
+
+        // Assign engineers to analysis tasks
+        for (AnalysisTaskAssignDTO assignment : assignments) {
+            AnalysisTask task = analysisTaskMapper.selectById(assignment.getTaskId());
+            if (task != null && task.getRequestId().equals(requestId)) {
+                task.setAssigneeId(assignment.getEngineerId());
+                analysisTaskMapper.updateById(task);
+            }
+        }
+
+        if (priority != null) {
+            request.setPriority(priority);
+        }
+        request.setStatus(RequestStatus.ASSIGNED.getValue());
+        request.setAssignedAt(LocalDateTime.now());
+        requestMapper.updateById(request);
+
+        log.info("Assigned request: requestNo={}", request.getRequestNo());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void rejectRequest(String requestId, String reason) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        request.setStatus(RequestStatus.REJECTED.getValue());
+        requestMapper.updateById(request);
+
+        // Complete workflow task with reject variable
+        Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
+        if (currentTask != null) {
+            Map<String, Object> variables = Map.of("approved", false, "rejectReason", reason);
+            workflowService.completeTask((String) currentTask.get("taskId"), (String) currentTask.get("assignee"), variables);
+        }
+
+        log.info("Rejected request: requestNo={}, reason={}", request.getRequestNo(), reason);
+    }
+
+    /**
+     * Receive sample - transition from ASSIGNED to SAMPLING
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void receiveSample(String requestId, String deliveryNote, String currentUserId) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        if (!RequestStatus.ASSIGNED.getValue().equals(request.getStatus())) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID);
+        }
+
+        request.setStatus(RequestStatus.SAMPLING.getValue());
+        request.setSampleDeliveryNote(deliveryNote);
+        requestMapper.updateById(request);
+
+        // Complete the "Sample Receive" task in workflow
+        Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
+        if (currentTask != null) {
+            workflowService.completeTask((String) currentTask.get("taskId"), currentUserId, Map.of("sampleReceived", true));
+        }
+
+        log.info("Sample received for request: requestNo={}", request.getRequestNo());
+    }
+
+    /**
+     * Start reporting phase - transition from SAMPLING to REPORTING
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void startReporting(String requestId, String currentUserId) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        if (!RequestStatus.SAMPLING.getValue().equals(request.getStatus())) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID);
+        }
+
+        request.setStatus(RequestStatus.REPORTING.getValue());
+        requestMapper.updateById(request);
+
+        // Complete the "Create Report" task in workflow
+        Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
+        if (currentTask != null) {
+            workflowService.completeTask((String) currentTask.get("taskId"), currentUserId, Map.of("reportCreated", true));
+        }
+
+        log.info("Reporting phase started for request: requestNo={}", request.getRequestNo());
+    }
+
+    /**
+     * Complete request - transition from APPROVING to COMPLETED
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void completeRequest(String requestId) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+
+        request.setStatus(RequestStatus.COMPLETED.getValue());
+        requestMapper.updateById(request);
+
+        // Complete the final task in workflow
+        Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
+        if (currentTask != null) {
+            workflowService.completeTask((String) currentTask.get("taskId"), (String) currentTask.get("assignee"), Map.of("approved", true));
+        }
+
+        log.info("Request completed: requestNo={}", request.getRequestNo());
+    }
+
+    /**
+     * Update analysis task status
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateAnalysisTask(String taskId, String status, String delayReason, String currentUserId) {
+        AnalysisTask task = analysisTaskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+
+        task.setStatus(status);
+        if ("IN_PROGRESS".equals(status)) {
+            task.setStartedAt(LocalDateTime.now());
+        } else if ("COMPLETED".equals(status)) {
+            task.setCompletedAt(LocalDateTime.now());
+        }
+        if (delayReason != null) {
+            task.setDelayReason(delayReason);
+        }
+        analysisTaskMapper.updateById(task);
+
+        // Check if all tasks for this request are completed
+        if ("COMPLETED".equals(status)) {
+            long pendingCount = analysisTaskMapper.selectCount(
+                    new LambdaQueryWrapper<AnalysisTask>()
+                            .eq(AnalysisTask::getRequestId, task.getRequestId())
+                            .ne(AnalysisTask::getStatus, "COMPLETED"));
+            if (pendingCount == 0) {
+                // All tasks done, auto-transition to APPROVING
+                Request request = requestMapper.selectById(task.getRequestId());
+                if (request != null && RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
+                    request.setStatus(RequestStatus.APPROVING.getValue());
+                    requestMapper.updateById(request);
+                }
+            }
+        }
+
+        log.info("Updated analysis task: taskId={}, status={}", taskId, status);
+    }
+
+    /**
+     * Get analysis tasks for a request
+     */
+    public List<AnalysisTask> getAnalysisTasks(String requestId) {
+        return analysisTaskMapper.selectList(
+                new LambdaQueryWrapper<AnalysisTask>()
+                        .eq(AnalysisTask::getRequestId, requestId)
+                        .orderByAsc(AnalysisTask::getSortOrder));
+    }
+
+    /**
+     * Get workflow current task info for a request
+     */
+    public Map<String, Object> getWorkflowStatus(String requestId) {
+        return workflowService.getCurrentTask(requestId);
+    }
+
+    /**
+     * Get pending workflow tasks for a user
+     */
+    public List<Map<String, Object>> getMyPendingTasks(String userId) {
+        return workflowService.getPendingTasks(userId);
+    }
+
+    public Page<Request> listRequests(int page, int size, String status, String brandId, String keyword) {
+        long current = page <= 0 ? 1 : page;
+        Page<Request> pageParam = new Page<>(current, size);
+        LambdaQueryWrapper<Request> wrapper = new LambdaQueryWrapper<>();
+
+        if (status != null) {
+            wrapper.eq(Request::getStatus, status);
+        }
+        if (brandId != null) {
+            wrapper.eq(Request::getBrandId, brandId);
+        }
+        if (keyword != null) {
+            wrapper.and(w -> w
+                    .like(Request::getRequestNo, keyword)
+                    .or().like(Request::getPartNumber, keyword)
+                    .or().like(Request::getPartName, keyword));
+        }
+        wrapper.orderByDesc(Request::getCreatedAt);
+
+        return requestMapper.selectPage(pageParam, wrapper);
+    }
+
+    public Request getRequest(String requestId) {
+        return requestMapper.selectById(requestId);
+    }
+
+    private String generateRequestNo() {
+        String year = String.valueOf(LocalDate.now().getYear());
+        String prefix = "REQ-" + year + "-";
+
+        // Get the max request number for this year
+        LambdaQueryWrapper<Request> wrapper = new LambdaQueryWrapper<>();
+        wrapper.likeRight(Request::getRequestNo, prefix)
+                .orderByDesc(Request::getRequestNo)
+                .last("LIMIT 1");
+        Request lastRequest = requestMapper.selectOne(wrapper);
+
+        int nextNum = 1;
+        if (lastRequest != null) {
+            String lastNo = lastRequest.getRequestNo();
+            String numPart = lastNo.substring(prefix.length());
+            nextNum = Integer.parseInt(numPart) + 1;
+        }
+
+        return prefix + String.format("%04d", nextNum);
+    }
+}

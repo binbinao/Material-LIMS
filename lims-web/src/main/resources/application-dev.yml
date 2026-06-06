@@ -1,0 +1,103 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: material-lims
+  datasource:
+    url: jdbc:postgresql://localhost:5432/lims
+    username: lims
+    password: lims_dev_password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: UTC
+    default-property-inclusion: non_null
+  sql:
+    init:
+      mode: never
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deletedAt
+      logic-delete-value: NOW()
+      logic-not-delete-value: "NULL"
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+# Flowable
+flowable:
+  database-schema-update: true
+  async-executor-activate: false
+
+# SpringDoc
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# Azure AD - placeholder for dev
+azure:
+  ad:
+    tenant-id: placeholder
+    client-id: placeholder
+    client-secret: placeholder
+    redirect-uri: https://localhost:8080/api/v1/auth/callback
+
+# MinIO
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: lims
+
+# External API (parts / suppliers master data)
+external:
+  api:
+    parts:
+      base-url: ""
+    suppliers:
+      base-url: ""
+    mock:
+      enabled: true
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      partService:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+      supplierService:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+  timelimiter:
+    instances:
+      partService:
+        timeoutDuration: 3s
+      supplierService:
+        timeoutDuration: 3s
+
+# Logging
+logging:
+  level:
+    com.lims: DEBUG
+    org.flowable: WARN
+    org.springframework.security: WARN

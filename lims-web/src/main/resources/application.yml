@@ -1,0 +1,109 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: material-lims
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lims}
+    username: ${DB_USER:lims}
+    password: ${DB_PASSWORD:lims}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: ${SPRING_CACHE_TYPE:simple}  # "redis" in prod, "simple" (in-memory) in dev
+    redis:
+      time-to-live: 1800000  # 30 min default TTL
+      cache-null-values: false
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: UTC
+    default-property-inclusion: non_null
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deletedAt
+      logic-delete-value: NOW()
+      logic-not-delete-value: "NULL"
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+# Flowable
+flowable:
+  database-schema-update: true
+  async-executor-activate: true
+
+# SpringDoc
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# Azure AD
+azure:
+  ad:
+    tenant-id: ${AZURE_AD_TENANT_ID}
+    client-id: ${AZURE_AD_CLIENT_ID}
+    client-secret: ${AZURE_AD_CLIENT_SECRET}
+    redirect-uri: ${AZURE_AD_REDIRECT_URI:https://localhost:8080/api/v1/auth/callback}
+
+# MinIO
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:lims}
+
+# External API (parts / suppliers master data)
+external:
+  api:
+    parts:
+      base-url: ${EXTERNAL_PARTS_BASE_URL:}
+    suppliers:
+      base-url: ${EXTERNAL_SUPPLIERS_BASE_URL:}
+    mock:
+      enabled: ${EXTERNAL_API_MOCK_ENABLED:false}
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      partService:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+      supplierService:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+  timelimiter:
+    instances:
+      partService:
+        timeoutDuration: 3s
+      supplierService:
+        timeoutDuration: 3s
+
+# Logging
+logging:
+  level:
+    com.lims: DEBUG
+    org.flowable: INFO
+    org.springframework.security: DEBUG

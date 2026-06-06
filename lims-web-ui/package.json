@@ -1,0 +1,58 @@
+{
+  "name": "lims-web-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Material LIMS Frontend",
+  "scripts": {
+    "dev": "max dev",
+    "build": "max build",
+    "start": "npm run dev",
+    "lint": "npm run lint:js && npm run lint:prettier",
+    "lint:js": "eslint --cache --ext .js,.jsx,.ts,.tsx ./src",
+    "lint:fix": "eslint --fix --cache --ext .js,.jsx,.ts,.tsx ./src",
+    "lint:prettier": "prettier --check 'src/**/*' --end-of-line auto",
+    "prettier": "prettier --write 'src/**/*' --end-of-line auto",
+    "test": "jest",
+    "prepare": "husky install"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.3.0",
+    "@ant-design/pro-components": "^2.6.0",
+    "@ant-design/pro-layout": "^7.17.0",
+    "@umijs/max": "^4.6.59",
+    "ahooks": "^3.9.7",
+    "antd": "^5.15.0",
+    "classnames": "^2.5.0",
+    "dayjs": "^1.11.10",
+    "echarts": "^5.5.0",
+    "echarts-for-react": "^3.0.2",
+    "i18next": "^23.10.0",
+    "i18next-browser-languagedetector": "^7.2.0",
+    "lodash": "^4.17.21",
+    "numeral": "^2.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-i18next": "^14.1.0",
+    "umi-request": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "eslint --fix",
+    "*.{js,jsx,ts,tsx,css,less,md,json}": "prettier --write"
+  }
+}

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             targetNamespace="http://lims.com/process">
+
+    <process id="requestProcess" name="Material LIMS Request Process" isExecutable="true">
+
+        <startEvent id="startEvent" name="Start"/>
+
+        <userTask id="assignTask" name="Manager Assign" flowable:candidateGroups="ROLE_MANAGER">
+            <documentation>Manager assigns engineers to analysis tasks</documentation>
+        </userTask>
+
+        <exclusiveGateway id="managerDecision" name="Manager Decision"/>
+
+        <userTask id="sampleTask" name="Sample Receive" flowable:candidateGroups="ROLE_TECHNICIAN">
+            <documentation>Technician receives and prepares sample</documentation>
+        </userTask>
+
+        <userTask id="reportTask" name="Create Report" flowable:candidateGroups="ROLE_ENGINEER">
+            <documentation>Engineer creates and edits the test report</documentation>
+        </userTask>
+
+        <userTask id="approveTask" name="Approve Report" flowable:candidateGroups="ROLE_MANAGER">
+            <documentation>Manager reviews and approves the report</documentation>
+        </userTask>
+
+        <exclusiveGateway id="approveDecision" name="Approve Decision"/>
+
+        <endEvent id="endCompleted" name="Completed"/>
+
+        <endEvent id="endRejected" name="Rejected"/>
+
+        <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="assignTask"/>
+        <sequenceFlow id="flow2" sourceRef="assignTask" targetRef="managerDecision"/>
+        <sequenceFlow id="flowAssign" name="Assign" sourceRef="managerDecision" targetRef="sampleTask">
+            <conditionExpression>${decision == 'assign' or decision == null}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flowReject" name="Reject" sourceRef="managerDecision" targetRef="endRejected">
+            <conditionExpression>${decision == 'reject'}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow4" sourceRef="sampleTask" targetRef="reportTask"/>
+        <sequenceFlow id="flow5" sourceRef="reportTask" targetRef="approveTask"/>
+        <sequenceFlow id="flow6" sourceRef="approveTask" targetRef="approveDecision"/>
+        <sequenceFlow id="flowComplete" name="Approve" sourceRef="approveDecision" targetRef="endCompleted">
+            <conditionExpression>${decision == 'approve' or decision == null}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flowRejectReport" name="Return to Edit" sourceRef="approveDecision" targetRef="reportTask">
+            <conditionExpression>${decision == 'reject'}</conditionExpression>
+        </sequenceFlow>
+
+    </process>
+</definitions>

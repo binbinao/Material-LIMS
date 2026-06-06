@@ -1,0 +1,38 @@
+# Java
+*.class
+*.jar
+*.war
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+.env
+.env.local
+.umi/
+.umi-production/
+.umi-test/
+
+# Cursor / IDE extras
+.cursor/
+.codebuddy/
+
+# Logs
+*.log
+logs/
+
+# Docker
+postgres_data/
