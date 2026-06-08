@@ -1,7 +1,7 @@
 package com.lims.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 
 import java.util.List;
@@ -35,6 +35,6 @@ public class RequestCreateDTO {
     private String realRequesterName;
 
     /** Selected analysis item IDs */
-    @NotNull(message = "At least one analysis item is required")
+    @NotEmpty(message = "Please select at least one analysis item")
     private List<String> analysisItemIds;
 }

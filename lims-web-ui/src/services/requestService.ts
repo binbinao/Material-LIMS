@@ -36,8 +36,16 @@ export async function submitRequest(id: string) {
   return request(`${API_PREFIX}/requests/${id}/submit`, { method: 'POST' });
 }
 
-export async function assignRequest(id: string, data: { assignments: { taskId: string; engineerId: string }[]; priority?: string }) {
-  return request(`${API_PREFIX}/requests/${id}/assign`, { method: 'POST', data, params: { priority: data.priority } });
+export async function assignRequest(
+  id: string,
+  assignments: { taskId: string; engineerId: string }[],
+  priority?: string,
+) {
+  return request(`${API_PREFIX}/requests/${id}/assign`, {
+    method: 'POST',
+    data: assignments,
+    params: priority ? { priority } : {},
+  });
 }
 
 export async function rejectRequest(id: string, data: { reason: string }) {

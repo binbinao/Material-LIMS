@@ -84,6 +84,7 @@ jest.mock('@/services/requestService', () => ({
   getRequestTasks: jest.fn(),
   getRequestWorkflow: jest.fn(),
   submitRequest: jest.fn(),
+  assignRequest: jest.fn(),
   rejectRequest: jest.fn(),
   receiveSample: jest.fn(),
   startReporting: jest.fn(),

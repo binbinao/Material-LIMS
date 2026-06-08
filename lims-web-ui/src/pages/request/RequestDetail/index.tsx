@@ -1,8 +1,9 @@
 import { PageContainer } from '@ant-design/pro-components';
-import { Card, Descriptions, Tag, Button, Steps, Table, Modal, Form, Input, App, Divider, Space, Timeline } from 'antd';
+import { Card, Descriptions, Tag, Button, Steps, Table, Modal, Form, Input, App, Divider, Space, Timeline, Select } from 'antd';
 import { useParams, history } from '@umijs/max';
 import { useRequest } from 'ahooks';
-import { getRequest, getRequestTasks, getRequestWorkflow, submitRequest, rejectRequest, receiveSample, startReporting, completeRequest, updateAnalysisTask } from '@/services/requestService';
+import { useState } from 'react';
+import { getRequest, getRequestTasks, getRequestWorkflow, submitRequest, assignRequest, rejectRequest, receiveSample, startReporting, completeRequest, updateAnalysisTask, getAdminUsers } from '@/services/requestService';
 import dayjs from 'dayjs';
 
 const statusMap: Record<string, { color: string; text: string }> = {
@@ -37,14 +38,46 @@ const RequestDetail: React.FC = () => {
   const { message, modal } = App.useApp();
 
   const { data: requestData, loading: reqLoading, refresh } = useRequest(() => getRequest(params.id));
-  const { data: tasksData } = useRequest(() => getRequestTasks(params.id));
+  const { data: tasksData, refresh: refreshTasks } = useRequest(() => getRequestTasks(params.id));
   const { data: workflowData } = useRequest(() => getRequestWorkflow(params.id));
+  const { data: usersData } = useRequest(() => getAdminUsers({ page: 1, size: 200 }));
 
   const req = requestData?.data;
   const tasks = tasksData?.data ?? [];
   const workflow = workflowData?.data;
 
+  const engineers = (usersData?.data?.records ?? []).filter((u: any) =>
+    (u.roles || '').split(',').includes('ENGINEER'),
+  );
+
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignMap, setAssignMap] = useState<Record<string, string>>({});
+
   const currentStepIndex = req ? statusSteps.indexOf(req.status) : -1;
+
+  const handleAssign = async () => {
+    const assignments = tasks
+      .map((t: API.AnalysisTask) => ({ taskId: t.id, engineerId: assignMap[t.id] }))
+      .filter((a: { engineerId?: string }) => !!a.engineerId);
+    if (assignments.length === 0) {
+      message.error('Please assign an engineer to at least one task');
+      return;
+    }
+    try {
+      const res = await assignRequest(params.id, assignments as { taskId: string; engineerId: string }[]);
+      if (res?.code !== 200) {
+        message.error(res?.message || 'Assignment failed');
+        return;
+      }
+      message.success('Request assigned');
+      setAssignOpen(false);
+      setAssignMap({});
+      refresh();
+      refreshTasks();
+    } catch {
+      message.error('Assignment failed');
+    }
+  };
 
   const handleAction = async (action: string) => {
     try {
@@ -120,6 +153,10 @@ const RequestDetail: React.FC = () => {
     switch (req.status) {
       case 'DRAFT':
         btns.push(<Button key="submit" type="primary" onClick={() => handleAction('submit')}>Submit</Button>);
+        break;
+      case 'SUBMITTED':
+        btns.push(<Button key="assign" type="primary" onClick={() => setAssignOpen(true)}>Assign</Button>);
+        btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
         break;
       case 'ASSIGNED':
         btns.push(<Button key="receive" type="primary" onClick={() => handleAction('receive-sample')}>Receive Sample</Button>);
@@ -225,6 +262,40 @@ const RequestDetail: React.FC = () => {
               </Descriptions>
             </Card>
           )}
+
+          <Modal
+            title="Assign Engineers"
+            open={assignOpen}
+            onOk={handleAssign}
+            onCancel={() => setAssignOpen(false)}
+            okText="Assign"
+            width={640}
+          >
+            <Table
+              dataSource={tasks}
+              rowKey="id"
+              size="small"
+              pagination={false}
+              columns={[
+                { title: 'Item ID', dataIndex: 'itemId', width: 160 },
+                {
+                  title: 'Engineer',
+                  render: (_: any, record: API.AnalysisTask) => (
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder="Select engineer"
+                      value={assignMap[record.id]}
+                      onChange={(v) => setAssignMap((m) => ({ ...m, [record.id]: v }))}
+                      options={engineers.map((e: any) => ({
+                        label: e.displayName || e.email || e.id,
+                        value: e.id,
+                      }))}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Modal>
         </>
       )}
     </PageContainer>

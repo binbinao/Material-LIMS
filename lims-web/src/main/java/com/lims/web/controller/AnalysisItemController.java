@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lims.common.annotation.AuditLog;
 import com.lims.common.result.R;
 import com.lims.model.entity.AnalysisItem;
+import com.lims.model.vo.AnalysisItemCascadeVO;
 import com.lims.service.AnalysisItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +39,7 @@ public class AnalysisItemController {
 
     @GetMapping("/cascade")
     @Operation(summary = "Get cascade data for frontend selection")
-    public R<List<AnalysisItem>> cascade() {
+    public R<List<AnalysisItemCascadeVO>> cascade() {
         return R.ok(analysisItemService.cascade());
     }
 
