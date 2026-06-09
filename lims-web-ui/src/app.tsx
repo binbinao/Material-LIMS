@@ -1,4 +1,17 @@
 // Umi runtime configuration
+import { App as AntApp } from 'antd';
+import React from 'react';
+
+/**
+ * Wrap the whole app in <AntApp> so that App.useApp() inside any page
+ * returns the real { message, modal, notification } APIs (otherwise they
+ * are non-functional placeholders and produce
+ * `TypeError: message.error is not a function` in production builds).
+ */
+export function rootContainer(container: React.ReactNode) {
+  return React.createElement(AntApp, { style: { height: '100%' } }, container);
+}
+
 export const request = {
   timeout: 10000,
   errorConfig: {

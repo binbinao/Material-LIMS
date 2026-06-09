@@ -1,0 +1,12 @@
+node_modules
+.umi
+.umi-production
+.umi-test
+coverage
+.DS_Store
+npm-debug.log*
+yarn-error.log
+*.local
+.idea
+.vscode
+.git

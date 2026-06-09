@@ -1,5 +1,5 @@
 import { Button, Card, Space, Typography, Divider, App } from 'antd';
-import { MicrosoftOutlined } from '@ant-design/icons';
+import { WindowsOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { getAuthUrl } from '@/services/requestService';
 
@@ -33,7 +33,7 @@ const Login: React.FC = () => {
             type="primary"
             size="large"
             block
-            icon={<MicrosoftOutlined />}
+            icon={<WindowsOutlined />}
             loading={loading}
             onClick={handleSSO}
             style={{ height: 48, fontSize: 16 }}

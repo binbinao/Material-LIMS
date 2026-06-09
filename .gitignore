@@ -36,3 +36,9 @@ logs/
 
 # Docker
 postgres_data/
+
+# Playwright E2E snapshots
+.playwright-cli/
+
+# UAT test output
+uat-out/

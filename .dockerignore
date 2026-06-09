@@ -1,0 +1,12 @@
+**/node_modules
+**/target
+**/dist
+**/.umi
+**/.umi-production
+**/.idea
+**/.vscode
+**/.git
+**/.DS_Store
+lims-web-ui
+docs
+*.md

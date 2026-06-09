@@ -151,6 +151,13 @@ public class RequestService {
         request.setAssignedAt(LocalDateTime.now());
         requestMapper.updateById(request);
 
+        // Advance Flowable workflow: complete "assignTask" with decision=assign so the process
+        // moves past managerDecision to sampleTask.
+        Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
+        if (currentTask != null) {
+            workflowService.completeTask((String) currentTask.get("taskId"), null, Map.of("decision", "assign"));
+        }
+
         log.info("Assigned request: requestNo={}", request.getRequestNo());
     }
 
@@ -163,11 +170,10 @@ public class RequestService {
         request.setStatus(RequestStatus.REJECTED.getValue());
         requestMapper.updateById(request);
 
-        // Complete workflow task with reject variable
+        // Complete workflow task with decision=reject
         Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
         if (currentTask != null) {
-            Map<String, Object> variables = Map.of("approved", false, "rejectReason", reason);
-            workflowService.completeTask((String) currentTask.get("taskId"), (String) currentTask.get("assignee"), variables);
+            workflowService.completeTask((String) currentTask.get("taskId"), null, Map.of("decision", "reject", "rejectReason", reason != null ? reason : ""));
         }
 
         log.info("Rejected request: requestNo={}, reason={}", request.getRequestNo(), reason);
@@ -237,10 +243,10 @@ public class RequestService {
         request.setStatus(RequestStatus.COMPLETED.getValue());
         requestMapper.updateById(request);
 
-        // Complete the final task in workflow
+        // Complete the final task in workflow with decision=approve
         Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
         if (currentTask != null) {
-            workflowService.completeTask((String) currentTask.get("taskId"), (String) currentTask.get("assignee"), Map.of("approved", true));
+            workflowService.completeTask((String) currentTask.get("taskId"), null, Map.of("decision", "approve"));
         }
 
         log.info("Request completed: requestNo={}", request.getRequestNo());
