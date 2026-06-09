@@ -1,6 +1,7 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { Card, Col, Row, Tag, Typography, Badge, Empty, Spin } from 'antd';
 import { useRequest } from 'ahooks';
+import { history } from '@umijs/max';
 import { getRequests } from '@/services/requestService';
 import dayjs from 'dayjs';
 
@@ -53,6 +54,7 @@ const RequestKanban: React.FC = () => {
                       size="small"
                       hoverable
                       style={{ borderLeft: `3px solid ${col.color}` }}
+                      onClick={() => history.push(`/request/${req.id}`)}
                     >
                       <div>
                         <Text strong>{req.requestNo}</Text>
