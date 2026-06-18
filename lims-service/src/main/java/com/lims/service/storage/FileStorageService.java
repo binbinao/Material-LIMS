@@ -130,7 +130,11 @@ public class FileStorageService {
      */
     static String sanitizeFilename(String raw) {
         if (raw == null || raw.isEmpty()) return "file";
-        String clean = raw.replaceAll("[\\p{Cntrl}/\\\\]", "_");
+        // Issue #29: normalize Unicode (handles homoglyph attacks), then drop
+        // control characters (incl. bidi overrides / formatting chars in
+        // U+200B-U+200F / U+202A-U+202E / U+FEFF) and path separators.
+        String clean = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC);
+        clean = clean.replaceAll("[\\p{Cntrl}\\p{Cf}/\\\\]", "_");
         clean = clean.replaceAll("_+", "_").replaceAll("^[._]+|[._]+$", "");
         if (clean.length() > 80) clean = clean.substring(0, 80);
         return clean.isEmpty() ? "file" : clean;
