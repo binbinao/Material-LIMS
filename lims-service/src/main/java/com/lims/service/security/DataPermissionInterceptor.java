@@ -3,6 +3,8 @@ package com.lims.service.security;
 import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
+import com.lims.common.exception.BusinessException;
+import com.lims.common.exception.ErrorCode;
 import com.lims.common.security.JwtTokenProvider;
 import com.lims.common.security.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -73,7 +75,17 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                 log.debug("Data permission injected. table={}, user={}, sql={}", tableName, principal.userId(), newSql);
             }
         } catch (Exception e) {
-            log.warn("DataPermission parse failed, fallback to original SQL: {}", e.getMessage());
+            // Issue #6: fail closed. Non-ADMIN/MANAGER users have already
+            // entered the row-level-filter path; if jsqlparser can't parse
+            // the SQL, falling through with the original would silently
+            // return unfiltered rows (any JOIN/UNION/subquery would bypass
+            // the filter). Throw so the query fails loudly instead of
+            // exfiltrating data. ADMIN/MANAGER have early-returned above
+            // and never reach this catch.
+            log.error("DataPermission parse failed, failing closed: {}", e.getMessage(), e);
+            throw new BusinessException(ErrorCode.DATA_PERMISSION_FILTER_FAILED,
+                    "Row-level permission filter could not be applied to this query. " +
+                            "Refusing to run unfiltered. (" + e.getMessage() + ")");
         }
     }
 

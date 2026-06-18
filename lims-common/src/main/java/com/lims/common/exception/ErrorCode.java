@@ -28,7 +28,8 @@ public enum ErrorCode {
     EXTERNAL_API_UNAVAILABLE(5001, "External API unavailable"),
     FILE_CONVERT_FAILED(5002, "File conversion failed"),
     M365_INTEGRATION_ERROR(5003, "Microsoft 365 integration error"),
-    FILE_UPLOAD_FAILED(5004, "File upload failed");
+    FILE_UPLOAD_FAILED(5004, "File upload failed"),
+    DATA_PERMISSION_FILTER_FAILED(5005, "Row-level data permission filter could not be applied");
 
     private final int code;
     private final String message;
