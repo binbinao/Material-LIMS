@@ -48,7 +48,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      # prod is the safe default. Issue #1: switching to dev here activates
+      # the dev permit-all filter chain and DevAuthFilter's synthetic ADMIN
+      # principal in any deployment that uses this compose file unchanged.
+      # Local developers should override with `SPRING_PROFILES_ACTIVE=dev` in
+      # their own override file, not in the shared compose.
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lims
       SPRING_DATASOURCE_USERNAME: lims
       SPRING_DATASOURCE_PASSWORD: lims_dev_password
