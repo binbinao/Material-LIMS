@@ -66,7 +66,6 @@ export default [
       { path: '/basic-data/brands', name: 'brands', component: './basic-data/BrandList' },
       { path: '/basic-data/request-types', name: 'requestTypes', component: './basic-data/RequestTypeList' },
       { path: '/basic-data/holidays', name: 'holidays', component: './basic-data/HolidayList' },
-      { path: '/basic-data/request-notes', name: 'requestNotes', component: './basic-data/RequestNoteList' },
       { path: '/basic-data/departments', name: 'departments', component: './basic-data/DepartmentList' },
     ],
   },
@@ -76,11 +75,7 @@ export default [
     icon: 'ExperimentOutlined',
     access: 'canAdmin',
     routes: [
-      { path: '/test-data/groups', name: 'groups', component: './test-data/TestGroupList' },
-      { path: '/test-data/sites', name: 'sites', component: './test-data/TestSiteList' },
-      { path: '/test-data/analysis-types', name: 'analysisTypes', component: './test-data/AnalysisTypeList' },
       { path: '/test-data/analysis-items', name: 'analysisItems', component: './test-data/AnalysisItemList' },
-      { path: '/test-data/specifications', name: 'specifications', component: './test-data/SpecificationList' },
     ],
   },
   {
