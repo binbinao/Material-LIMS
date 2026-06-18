@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -31,14 +32,17 @@ public class AuthController {
 
     @GetMapping("/azure-ad-login")
     @Operation(summary = "Get Azure AD login redirect URL")
-    public R<Map<String, String>> azureAdLogin() {
-        return R.ok(Map.of("authorizationUrl", authService.getAuthorizationUrl()));
+    public R<Map<String, String>> azureAdLogin(HttpSession session) {
+        return R.ok(Map.of("authorizationUrl", authService.getAuthorizationUrl(session)));
     }
 
-    @GetMapping("/callback")
-    @Operation(summary = "Azure AD OAuth callback endpoint")
-    public R<Map<String, Object>> callback(@RequestParam String code, HttpServletResponse response) {
-        Map<String, Object> result = authService.handleCallback(code);
+    @PostMapping("/callback")
+    @Operation(summary = "Azure AD OAuth callback endpoint (response_mode=form_post)")
+    public R<Map<String, Object>> callback(@RequestParam String code,
+                                           @RequestParam String state,
+                                           HttpSession session,
+                                           HttpServletResponse response) {
+        Map<String, Object> result = authService.handleCallback(code, state, session);
         // Set httpOnly cookie so subsequent requests carry the token
         Object tokenObj = result.get("token");
         if (tokenObj instanceof String token) {
