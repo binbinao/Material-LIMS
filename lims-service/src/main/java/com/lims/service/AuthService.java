@@ -121,8 +121,11 @@ public class AuthService {
         // not strictly required for a UUID.
         String expectedState = session != null ? (String) session.getAttribute(SESSION_ATTR_STATE) : null;
         if (expectedState == null || !expectedState.equals(state)) {
+            // Issue #23: don't echo the expected UUID in the user-facing
+            // error. Log server-side; the message is generic.
+            log.warn("OAuth state mismatch (expected={}, got={})", expectedState, state);
             throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
-                    "OAuth state mismatch: expected " + expectedState + ", got " + state);
+                    "OAuth state mismatch");
         }
 
         // Step 1: Exchange code for tokens
@@ -165,8 +168,11 @@ public class AuthService {
         String expectedNonce = session != null ? (String) session.getAttribute(SESSION_ATTR_NONCE) : null;
         String actualNonce = (String) claims.get("nonce");
         if (expectedNonce == null || !expectedNonce.equals(actualNonce)) {
+            // Issue #23: same rationale as state — keep nonce values out
+            // of the user-facing message.
+            log.warn("id_token nonce mismatch (expected={}, got={})", expectedNonce, actualNonce);
             throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
-                    "id_token nonce mismatch: expected " + expectedNonce + ", got " + actualNonce);
+                    "id_token nonce mismatch");
         }
 
         String email = firstNonBlank(
