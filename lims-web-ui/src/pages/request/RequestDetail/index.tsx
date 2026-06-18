@@ -53,6 +53,13 @@ const RequestDetail: React.FC = () => {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignMap, setAssignMap] = useState<Record<string, string>>({});
 
+  // Issue #11: Form instances for the reject-modal and the
+  // receive-sample-modal. Reading values via document.getElementById
+  // bypassed Ant's <Form rules={[{ required: true }]}> validation;
+  // useForm + validateFields() makes those rules actually fire.
+  const [rejectForm] = Form.useForm();
+  const [sampleForm] = Form.useForm();
+
   const currentStepIndex = req ? statusSteps.indexOf(req.status) : -1;
 
   const handleAssign = async () => {
@@ -90,36 +97,50 @@ const RequestDetail: React.FC = () => {
           modal.confirm({
             title: 'Reject Request',
             content: (
-              <Form id="reject-form">
-                <Form.Item name="reason" label="Reason" rules={[{ required: true }]}>
-                  <Input.TextArea rows={3} id="reject-reason" />
+              <Form form={rejectForm} layout="vertical">
+                <Form.Item name="reason" label="Reason" rules={[{ required: true, message: 'Please enter a reject reason' }]}>
+                  <Input.TextArea rows={3} placeholder="Why is this request being rejected?" />
                 </Form.Item>
               </Form>
             ),
             onOk: async () => {
-              const el = document.getElementById('reject-reason') as HTMLTextAreaElement;
-              await rejectRequest(params.id, { reason: el?.value || '' });
-              message.success('Request rejected');
-              refresh();
+              try {
+                const values = await rejectForm.validateFields();
+                await rejectRequest(params.id, { reason: values.reason });
+                rejectForm.resetFields();
+                message.success('Request rejected');
+                refresh();
+              } catch {
+                // validateFields rejected — Ant already shows the error
+                // inline; re-throw so the modal stays open.
+                throw new Error('validation');
+              }
             },
+            onCancel: () => rejectForm.resetFields(),
           });
           return;
         case 'receive-sample':
           modal.confirm({
             title: 'Receive Sample',
             content: (
-              <Form id="sample-form">
+              <Form form={sampleForm} layout="vertical">
                 <Form.Item name="deliveryNote" label="Delivery Note">
-                  <Input.TextArea rows={2} id="delivery-note" />
+                  <Input.TextArea rows={2} placeholder="Optional delivery note" />
                 </Form.Item>
               </Form>
             ),
             onOk: async () => {
-              const el = document.getElementById('delivery-note') as HTMLTextAreaElement;
-              await receiveSample(params.id, { deliveryNote: el?.value || '' });
-              message.success('Sample received');
-              refresh();
+              try {
+                const values = await sampleForm.validateFields();
+                await receiveSample(params.id, { deliveryNote: values.deliveryNote || '' });
+                sampleForm.resetFields();
+                message.success('Sample received');
+                refresh();
+              } catch {
+                throw new Error('validation');
+              }
             },
+            onCancel: () => sampleForm.resetFields(),
           });
           return;
         case 'start-reporting':

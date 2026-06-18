@@ -17,6 +17,11 @@ const ReportDetail: React.FC = () => {
   const params = useParams<{ id: string }>();
   const { message, modal } = App.useApp();
 
+  // Issue #11: Form instance for the revise modal. Reading values via
+  // document.getElementById bypassed Ant's <Form rules={[{ required: true }]}>
+  // validation; useForm + validateFields() makes the required rule fire.
+  const [reviseForm] = Form.useForm();
+
   const { data: reportData, loading, refresh } = useRequest(() => getReport(params.id));
   const report = reportData?.data;
 
@@ -39,18 +44,24 @@ const ReportDetail: React.FC = () => {
           modal.confirm({
             title: 'Revise Report',
             content: (
-              <Form>
-                <Form.Item name="revisionNote" label="Revision Note" rules={[{ required: true }]}>
-                  <Input.TextArea rows={3} id="revision-note-input" />
+              <Form form={reviseForm} layout="vertical">
+                <Form.Item name="revisionNote" label="Revision Note" rules={[{ required: true, message: 'Please enter a revision note' }]}>
+                  <Input.TextArea rows={3} placeholder="What changed in this revision?" />
                 </Form.Item>
               </Form>
             ),
             onOk: async () => {
-              const el = document.getElementById('revision-note-input') as HTMLTextAreaElement;
-              await reviseReport(params.id, { revisionNote: el?.value || '' });
-              message.success('Report revision started');
-              refresh();
+              try {
+                const values = await reviseForm.validateFields();
+                await reviseReport(params.id, { revisionNote: values.revisionNote });
+                reviseForm.resetFields();
+                message.success('Report revision started');
+                refresh();
+              } catch {
+                throw new Error('validation');
+              }
             },
+            onCancel: () => reviseForm.resetFields(),
           });
           return;
         case 'edit':
