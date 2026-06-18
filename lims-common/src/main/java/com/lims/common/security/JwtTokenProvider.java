@@ -3,6 +3,7 @@ package com.lims.common.security;
 import cn.hutool.jwt.JWT;
 import cn.hutool.jwt.JWTUtil;
 import cn.hutool.jwt.signers.JWTSignerUtil;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -31,8 +32,31 @@ public class JwtTokenProvider {
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_DEPT_ID = "deptId";
 
-    @Value("${security.jwt.secret:lims-default-dev-secret-please-override-in-prod-32bytes!!}")
+    @Value("${security.jwt.secret}")
     private String secret;
+
+    /**
+     * Minimum HS256 secret length in bytes. Refuse to boot if the configured
+     * secret is shorter — a 32-byte threshold is the RFC 7518 §3.2 minimum for
+     * HS256 and matches what the previous hard-coded default provided.
+     */
+    private static final int MIN_SECRET_BYTES = 32;
+
+    @PostConstruct
+    void validateSecret() {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "security.jwt.secret is not configured. Set the JWT_SECRET " +
+                            "environment variable (or property) before starting the application.");
+        }
+        int bytes = secret.getBytes(StandardCharsets.UTF_8).length;
+        if (bytes < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "security.jwt.secret is too short (" + bytes + " bytes). " +
+                            "HS256 requires at least " + MIN_SECRET_BYTES + " bytes. " +
+                            "Set JWT_SECRET to a stronger value before starting the application.");
+        }
+    }
 
     /** TTL（小时），默认 8 小时（与工作日对齐） */
     @Value("${security.jwt.ttl-hours:8}")
