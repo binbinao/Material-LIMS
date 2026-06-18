@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lims.common.exception.BusinessException;
 import com.lims.common.exception.ErrorCode;
+import com.lims.common.security.JwtTokenProvider;
+import com.lims.common.security.SecurityUtils;
 import com.lims.dao.mapper.*;
 import com.lims.model.dto.AnalysisTaskAssignDTO;
 import com.lims.model.dto.RequestCreateDTO;
@@ -260,6 +262,21 @@ public class RequestService {
         AnalysisTask task = analysisTaskMapper.selectById(taskId);
         if (task == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+
+        // Issue #15: ownership check. Only the assignee (or a MANAGER /
+        // ADMIN) may mutate the task. Without this any logged-in user
+        // can mark someone else's task as COMPLETED, which auto-
+        // transitions the request into APPROVING — an attacker can
+        // bypass the manager-approval step entirely.
+        JwtTokenProvider.AuthPrincipal principal = SecurityUtils.getCurrentPrincipal();
+        boolean callerIsManagerOrAdmin = principal != null
+                && (principal.hasRole("ADMIN") || principal.hasRole("MANAGER"));
+        if (!callerIsManagerOrAdmin
+                && (task.getAssigneeId() == null
+                        || !task.getAssigneeId().equals(currentUserId))) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                    "Only the task's assignee (or a MANAGER) may update this task");
         }
 
         task.setStatus(status);
