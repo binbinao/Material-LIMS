@@ -19,9 +19,17 @@ export const request = {
       // Disable default error throwing - we handle errors in components
     },
     errorHandler(error: any) {
-      // Silently handle common errors - don't throw or redirect
-      if (error?.response?.status === 401 || error?.response?.status === 403) {
-        console.warn('Auth error:', error?.response?.status);
+      // Issue #13: on 401, the JWT has expired or is otherwise invalid.
+      // Redirect to /login so the user can re-authenticate instead of
+      // being stuck on a page that silently fails every API call.
+      if (error?.response?.status === 401) {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
+        return;
+      }
+      if (error?.response?.status === 403) {
+        console.warn('Auth forbidden:', error?.response?.status);
         return;
       }
       console.warn('Request error:', error?.message || 'Unknown error');
@@ -41,6 +49,13 @@ export async function getInitialState(): Promise<{
 }> {
   try {
     const res = await fetch('/api/v1/auth/me');
+    // Issue #13: a 401 means the JWT is missing/expired. Treat that as
+    // "not logged in" rather than as a successful response with a
+    // possibly-malformed payload. Returning {} here leaves currentUser
+    // undefined, so the access plugin marks the user as anonymous.
+    if (res.status === 401) {
+      return {};
+    }
     const json = await res.json();
     return { currentUser: json?.data };
   } catch {
