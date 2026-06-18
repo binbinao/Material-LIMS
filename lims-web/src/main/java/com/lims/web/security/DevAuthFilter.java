@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,8 +16,12 @@ import java.util.List;
 
 /**
  * Dev profile 专用：未登录时自动注入一个虚拟 ADMIN 用户，方便本地调试。
- * 不会在 prod 启用。
+ * 不会在 prod 启用。{@code @Profile("dev")} 是 defense-in-depth：当前在
+ * SecurityConfig.devFilterChain 中通过 {@code new DevAuthFilter()} 内联实例化，
+ * 加了注解后即使将来有人把它改成 {@code @Component} / {@code @Bean}，也不会被
+ * prod profile 注册进 application context。
  */
+@Profile("dev")
 public class DevAuthFilter extends OncePerRequestFilter {
 
     public static final String DEV_USER_ID = "dev-user-0001";
