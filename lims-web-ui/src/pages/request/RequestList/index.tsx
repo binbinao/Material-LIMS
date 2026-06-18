@@ -5,6 +5,8 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useRef } from 'react';
 import { history, useIntl } from '@umijs/max';
 import { getRequests } from '@/services/requestService';
+  const { message } = App.useApp();
+
 
 const statusColorMap: Record<string, string> = {
   DRAFT: 'default',
@@ -91,7 +93,8 @@ const RequestList: React.FC = () => {
             total: result?.data?.total ?? 0,
             success: result?.code === 200,
           };
-        } catch {
+        } catch (e: any) {
+          message.error(e?.message || 'Load failed');
           return { data: [], total: 0, success: false };
         }
       }}

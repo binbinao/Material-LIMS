@@ -3,6 +3,8 @@ import { ProTable } from '@ant-design/pro-components';
 import { Tag, Modal, Descriptions, Typography } from 'antd';
 import { useRef, useState } from 'react';
 import { getAdminLogs } from '@/services/requestService';
+  const { message } = App.useApp();
+
 
 const MODULE_COLOR: Record<string, string> = {
   REQUEST: 'blue', REPORT: 'cyan', EQUIPMENT: 'purple', EQUIPMENT_REPAIR: 'magenta',
@@ -68,9 +70,10 @@ const LogList: React.FC = () => {
               endDate: params.endDate,
             });
             return { data: r?.data?.records ?? [], total: r?.data?.total ?? 0, success: r?.code === 200 };
-          } catch {
-            return { data: [], total: 0, success: false };
-          }
+          } catch (e: any) {
+          message.error(e?.message || 'Load failed');
+          return { data: [], total: 0, success: false };
+        }
         }}
         search={{ labelWidth: 'auto' }}
       />

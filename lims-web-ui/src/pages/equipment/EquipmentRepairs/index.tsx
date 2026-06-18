@@ -104,9 +104,10 @@ const EquipmentRepairs: React.FC = () => {
           try {
             const r = await getEquipmentRepairs({ page: (params.current || 1) - 1, size: params.pageSize, status: params.status });
             return { data: r?.data?.records ?? [], total: r?.data?.total ?? 0, success: r?.code === 200 };
-          } catch {
-            return { data: [], total: 0, success: false };
-          }
+          } catch (e: any) {
+          message.error(e?.message || 'Load failed');
+          return { data: [], total: 0, success: false };
+        }
         }}
         search={{ labelWidth: 'auto' }}
         toolBarRender={() => [
