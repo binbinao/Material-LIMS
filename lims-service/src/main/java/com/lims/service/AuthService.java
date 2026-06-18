@@ -13,6 +13,7 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +36,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -65,34 +67,59 @@ public class AuthService {
     private Instant cachedJwksFetchedAt;
     private static final long JWKS_CACHE_TTL_SECONDS = 600;  // 10 min
 
+    /** HttpSession attribute name for the OAuth 2.0 state parameter (CSRF token). */
+    public static final String SESSION_ATTR_STATE = "oauth_state";
+    /** HttpSession attribute name for the OIDC nonce (id_token replay protection). */
+    public static final String SESSION_ATTR_NONCE = "oauth_nonce";
+
     /**
-     * Build Azure AD authorization URL for SSO login
+     * Build Azure AD authorization URL for SSO login.
+     *
+     * <p>Issue #4: now generates a cryptographically random {@code state}
+     * (CSRF protection per RFC 6749 §10.12) and a random {@code nonce}
+     * (OpenID Connect Core 1.0 §15.5.2 — replay protection), persists both
+     * in the supplied {@link HttpSession}, and embeds them in the URL so
+     * {@link #handleCallback} can validate them on return.
      */
-    public String getAuthorizationUrl() {
-        return String.format(
-                "https://login.microsoftonline.com/%s/oauth2/v2.0/authorize" +
-                "?client_id=%s" +
+    public String getAuthorizationUrl(HttpSession session) {
+        String state = UUID.randomUUID().toString();
+        String nonce = UUID.randomUUID().toString();
+        session.setAttribute(SESSION_ATTR_STATE, state);
+        session.setAttribute(SESSION_ATTR_NONCE, nonce);
+        return "https://login.microsoftonline.com/" + tenantId + "/oauth2/v2.0/authorize" +
+                "?client_id=" + clientId +
                 "&response_type=code" +
-                "&redirect_uri=%s" +
-                "&scope=%s" +
-                "&response_mode=query",
-                tenantId, clientId,
-                URLEncoder.encode(redirectUri, StandardCharsets.UTF_8),
-                URLEncoder.encode("openid profile email User.Read", StandardCharsets.UTF_8));
+                "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) +
+                "&scope=" + URLEncoder.encode("openid profile email User.Read", StandardCharsets.UTF_8) +
+                "&response_mode=form_post" +
+                "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8) +
+                "&nonce=" + URLEncoder.encode(nonce, StandardCharsets.UTF_8);
     }
 
     /**
-     * Handle Azure AD OAuth callback: exchange code for token, create/update user, sign LIMS JWT.
+     * Handle Azure AD OAuth callback: validate state + nonce, exchange code for
+     * token, create/update user, sign LIMS JWT.
      * @return Map with keys: token, user, expiresInHours
      */
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> handleCallback(String code) {
+    public Map<String, Object> handleCallback(String code, String state, HttpSession session) {
         if (!azureAdEnabled) {
             throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
                     "Azure AD is not enabled in this environment. Set azure.ad.enabled=true");
         }
         if (code == null || code.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_VALIDATION_FAILED, "code is required");
+        }
+
+        // Issue #4: state validation (CSRF protection). The expected state
+        // was stored in session by getAuthorizationUrl; the incoming state
+        // must match it exactly. Comparing via .equals() is the canonical
+        // RFC 6749 §10.12 check; a constant-time compare is preferred but
+        // not strictly required for a UUID.
+        String expectedState = session != null ? (String) session.getAttribute(SESSION_ATTR_STATE) : null;
+        if (expectedState == null || !expectedState.equals(state)) {
+            throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                    "OAuth state mismatch: expected " + expectedState + ", got " + state);
         }
 
         // Step 1: Exchange code for tokens
@@ -124,10 +151,20 @@ public class AuthService {
             throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR, "id_token missing in token response");
         }
 
-        // Step 2: Decode id_token (no signature verification here; Azure AD already returned via TLS)
-        // Production hardening: verify signature against Microsoft JWKS (jwks_uri).
+        // Step 2: Decode id_token and verify signature (issue #3)
         String idToken = (String) body.get("id_token");
         Map<String, Object> claims = parseIdTokenClaims(idToken);
+
+        // Issue #4: nonce claim must match the value we stored in session
+        // when getAuthorizationUrl was called. Without this, a replayed
+        // id_token from a prior session (still within Azure AD's ~1h
+        // expiry) would be accepted.
+        String expectedNonce = session != null ? (String) session.getAttribute(SESSION_ATTR_NONCE) : null;
+        String actualNonce = (String) claims.get("nonce");
+        if (expectedNonce == null || !expectedNonce.equals(actualNonce)) {
+            throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                    "id_token nonce mismatch: expected " + expectedNonce + ", got " + actualNonce);
+        }
 
         String email = firstNonBlank(
                 (String) claims.get("email"),
