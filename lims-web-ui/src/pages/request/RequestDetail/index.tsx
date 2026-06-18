@@ -60,6 +60,9 @@ const RequestDetail: React.FC = () => {
   const [rejectForm] = Form.useForm();
   const [sampleForm] = Form.useForm();
 
+  // Issue #24: gate action buttons by role.
+  const access = useAccess();
+
   const currentStepIndex = req ? statusSteps.indexOf(req.status) : -1;
 
   const handleAssign = async () => {
@@ -175,21 +178,33 @@ const RequestDetail: React.FC = () => {
     const btns: React.ReactNode[] = [];
     switch (req.status) {
       case 'DRAFT':
-        btns.push(<Button key="submit" type="primary" onClick={() => handleAction('submit')}>Submit</Button>);
+        if (access.canManager) {
+          btns.push(<Button key="submit" type="primary" onClick={() => handleAction('submit')}>Submit</Button>);
+        }
         break;
       case 'SUBMITTED':
-        btns.push(<Button key="assign" type="primary" onClick={() => setAssignOpen(true)}>Assign</Button>);
-        btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
+        if (access.canManager) {
+          btns.push(<Button key="assign" type="primary" onClick={() => setAssignOpen(true)}>Assign</Button>);
+          btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
+        }
         break;
       case 'ASSIGNED':
-        btns.push(<Button key="receive" type="primary" onClick={() => handleAction('receive-sample')}>Receive Sample</Button>);
-        btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
+        if (access.canTechnician || access.canManager) {
+          btns.push(<Button key="receive" type="primary" onClick={() => handleAction('receive-sample')}>Receive Sample</Button>);
+        }
+        if (access.canManager) {
+          btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
+        }
         break;
       case 'SAMPLING':
-        btns.push(<Button key="report" type="primary" onClick={() => handleAction('start-reporting')}>Start Reporting</Button>);
+        if (access.canEngineer || access.canManager) {
+          btns.push(<Button key="report" type="primary" onClick={() => handleAction('start-reporting')}>Start Reporting</Button>);
+        }
         break;
       case 'APPROVING':
-        btns.push(<Button key="complete" type="primary" onClick={() => handleAction('complete')}>Complete</Button>);
+        if (access.canManager) {
+          btns.push(<Button key="complete" type="primary" onClick={() => handleAction('complete')}>Complete</Button>);
+        }
         break;
     }
     return btns.length > 0 ? <Space>{btns}</Space> : null;

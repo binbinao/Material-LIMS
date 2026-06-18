@@ -22,6 +22,9 @@ const ReportDetail: React.FC = () => {
   // validation; useForm + validateFields() makes the required rule fire.
   const [reviseForm] = Form.useForm();
 
+  // Issue #24: gate action buttons by role.
+  const access = useAccess();
+
   const { data: reportData, loading, refresh } = useRequest(() => getReport(params.id));
   const report = reportData?.data;
 
@@ -87,22 +90,28 @@ const ReportDetail: React.FC = () => {
     switch (report.status) {
       case 'DRAFT':
       case 'REVISING':
-        btns.push(
-          <Button key="edit" onClick={() => handleAction('edit')}>Edit in M365</Button>,
-          <Button key="sync" onClick={() => handleAction('sync')}>Sync from SharePoint</Button>,
-          <Button key="submit" type="primary" onClick={() => handleAction('submit')}>Submit</Button>,
-        );
+        if (access.canEngineer || access.canManager) {
+          btns.push(
+            <Button key="edit" onClick={() => handleAction('edit')}>Edit in M365</Button>,
+            <Button key="sync" onClick={() => handleAction('sync')}>Sync from SharePoint</Button>,
+            <Button key="submit" type="primary" onClick={() => handleAction('submit')}>Submit</Button>,
+          );
+        }
         break;
       case 'IN_REVIEW':
-        btns.push(
-          <Button key="approve" type="primary" onClick={() => handleAction('approve')}>Approve</Button>,
-          <Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>,
-        );
+        if (access.canManager) {
+          btns.push(
+            <Button key="approve" type="primary" onClick={() => handleAction('approve')}>Approve</Button>,
+            <Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>,
+          );
+        }
         break;
       case 'APPROVED':
-        btns.push(
-          <Button key="revise" type="primary" onClick={() => handleAction('revise')}>Revise</Button>,
-        );
+        if (access.canEngineer || access.canManager) {
+          btns.push(
+            <Button key="revise" type="primary" onClick={() => handleAction('revise')}>Revise</Button>,
+          );
+        }
         break;
     }
     return btns.length > 0 ? <Space>{btns}</Space> : null;
