@@ -60,6 +60,7 @@ public class ReportController {
 
     @PostMapping("/{id}/submit")
     @Operation(summary = "Submit report for approval")
+    @PreAuthorize("hasAnyRole('ENGINEER','MANAGER','ADMIN')")
     @AuditLog(module = "REPORT", action = "SUBMIT")
     public R<Void> submit(@PathVariable String id) {
         reportService.submitReport(id, SecurityUtils.getCurrentUserId());
@@ -86,6 +87,7 @@ public class ReportController {
 
     @PostMapping("/{id}/revise")
     @Operation(summary = "Initiate report revision")
+    @PreAuthorize("hasAnyRole('ENGINEER','MANAGER','ADMIN')")
     @AuditLog(module = "REPORT", action = "REVISE")
     public R<Report> revise(@PathVariable String id, @RequestBody Map<String, String> body) {
         return R.ok(reportService.reviseReport(id, body.get("revisionNote"), SecurityUtils.getCurrentUserId()));
@@ -93,6 +95,7 @@ public class ReportController {
 
     @GetMapping("/{id}/revisions")
     @Operation(summary = "Get report version history")
+    @PreAuthorize("isAuthenticated()")
     public R<List<Report>> revisions(@PathVariable String id) {
         return R.ok(reportService.getRevisions(id));
     }

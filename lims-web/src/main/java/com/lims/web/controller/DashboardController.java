@@ -15,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.lims.common.security.SecurityUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -33,7 +34,12 @@ public class DashboardController {
     private final CostStatsService costStatsService;
 
     @GetMapping("/my-tasks")
-    public R<Map<String, Object>> myTasks(@RequestParam String userId) {
+    @PreAuthorize("isAuthenticated()")
+    public R<Map<String, Object>> myTasks() {
+        // Issue #5: derive userId from the security context (the JWT subject
+        // set by JwtAuthenticationFilter), not from a @RequestParam. The old
+        // signature let any logged-in user fetch any other user's stats.
+        String userId = SecurityUtils.getCurrentUserId();
         Map<String, Long> requestStats = new HashMap<>();
         for (String status : List.of("DRAFT", "SUBMITTED", "ASSIGNED", "REPORTING", "APPROVING", "COMPLETED")) {
             requestStats.put(status, requestMapper.selectCount(

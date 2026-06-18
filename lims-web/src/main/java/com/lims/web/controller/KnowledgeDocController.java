@@ -23,6 +23,7 @@ public class KnowledgeDocController {
     private final KnowledgeDocService service;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<KnowledgeDoc>> list(@RequestParam(defaultValue = "1") int page,
                                       @RequestParam(defaultValue = "20") int size,
                                       @RequestParam(required = false) String category,
@@ -31,6 +32,7 @@ public class KnowledgeDocController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<KnowledgeDoc> getById(@PathVariable String id) {
         return R.ok(service.getById(id));
     }
