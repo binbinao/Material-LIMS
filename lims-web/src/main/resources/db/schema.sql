@@ -72,7 +72,7 @@ CREATE TABLE request_note (
 CREATE TABLE department (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
-    parent_id VARCHAR(36) REFERENCES department(id),
+    parent_id VARCHAR(36),
     external_id VARCHAR(100),
     level INTEGER DEFAULT 1,
     sort_order INTEGER DEFAULT 0,
@@ -92,7 +92,7 @@ CREATE TABLE sys_user (
     email VARCHAR(200) NOT NULL UNIQUE,
     display_name VARCHAR(200) NOT NULL,
     login_id VARCHAR(200),
-    dept_id VARCHAR(36) REFERENCES department(id),
+    dept_id VARCHAR(36),
     roles VARCHAR(100) DEFAULT 'REQUESTER',
     external_id VARCHAR(200),
     is_active BOOLEAN DEFAULT TRUE,
@@ -103,7 +103,7 @@ CREATE TABLE sys_user (
 
 CREATE TABLE sys_operation_log (
     id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) REFERENCES sys_user(id),
+    user_id VARCHAR(36),
     module VARCHAR(50) NOT NULL,
     action VARCHAR(20) NOT NULL,
     entity_id VARCHAR(100),
@@ -170,7 +170,7 @@ CREATE TABLE test_site (
 
 CREATE TABLE analysis_type (
     id VARCHAR(36) PRIMARY KEY,
-    group_id VARCHAR(36) NOT NULL REFERENCES test_group(id),
+    group_id VARCHAR(36) NOT NULL,
     name VARCHAR(200) NOT NULL,
     description TEXT,
     sort_order INTEGER DEFAULT 0,
@@ -184,7 +184,7 @@ CREATE TABLE analysis_type (
 
 CREATE TABLE specification (
     id VARCHAR(36) PRIMARY KEY,
-    group_id VARCHAR(36) REFERENCES test_group(id),
+    group_id VARCHAR(36),
     name VARCHAR(200) NOT NULL,
     unit VARCHAR(50),
     description TEXT,
@@ -217,13 +217,13 @@ CREATE TABLE equipment (
 
 CREATE TABLE analysis_item (
     id VARCHAR(36) PRIMARY KEY,
-    group_id VARCHAR(36) NOT NULL REFERENCES test_group(id),
-    site_id VARCHAR(36) REFERENCES test_site(id),
-    type_id VARCHAR(36) NOT NULL REFERENCES analysis_type(id),
+    group_id VARCHAR(36) NOT NULL,
+    site_id VARCHAR(36),
+    type_id VARCHAR(36) NOT NULL,
     name VARCHAR(200) NOT NULL,
-    equipment_id VARCHAR(36) REFERENCES equipment(id),
+    equipment_id VARCHAR(36),
     test_standards VARCHAR(500),
-    specification_id VARCHAR(36) REFERENCES specification(id),
+    specification_id VARCHAR(36),
     cost DECIMAL(12,2),
     unit_price DECIMAL(12,2),
     unit VARCHAR(50),
@@ -246,11 +246,11 @@ CREATE TABLE analysis_item (
 CREATE TABLE request (
     id VARCHAR(36) PRIMARY KEY,
     request_no VARCHAR(50) NOT NULL UNIQUE,
-    brand_id VARCHAR(36) NOT NULL REFERENCES brand(id),
-    dept_id VARCHAR(36) REFERENCES department(id),
-    type_id VARCHAR(36) NOT NULL REFERENCES request_type(id),
-    requester_id VARCHAR(36) NOT NULL REFERENCES sys_user(id),
-    proxy_requester_id VARCHAR(36) REFERENCES sys_user(id),
+    brand_id VARCHAR(36) NOT NULL,
+    dept_id VARCHAR(36),
+    type_id VARCHAR(36) NOT NULL,
+    requester_id VARCHAR(36) NOT NULL,
+    proxy_requester_id VARCHAR(36),
     real_requester_name VARCHAR(200),
     part_number VARCHAR(200),
     part_name VARCHAR(500),
@@ -276,9 +276,9 @@ CREATE TABLE request (
 
 CREATE TABLE analysis_task (
     id VARCHAR(36) PRIMARY KEY,
-    request_id VARCHAR(36) NOT NULL REFERENCES request(id),
-    item_id VARCHAR(36) NOT NULL REFERENCES analysis_item(id),
-    assignee_id VARCHAR(36) REFERENCES sys_user(id),
+    request_id VARCHAR(36) NOT NULL,
+    item_id VARCHAR(36) NOT NULL,
+    assignee_id VARCHAR(36),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'DELAYED', 'COMPLETED')),
     delay_reason TEXT,
     started_at TIMESTAMP,
@@ -294,8 +294,8 @@ CREATE TABLE analysis_task (
 
 CREATE TABLE sample (
     id VARCHAR(36) PRIMARY KEY,
-    request_id VARCHAR(36) NOT NULL REFERENCES request(id),
-    received_by VARCHAR(36) REFERENCES sys_user(id),
+    request_id VARCHAR(36) NOT NULL,
+    received_by VARCHAR(36),
     received_at TIMESTAMP,
     preparation_status VARCHAR(20) DEFAULT 'PENDING' CHECK (preparation_status IN ('PENDING', 'PREPARING', 'READY')),
     preparation_detail TEXT,
@@ -310,9 +310,9 @@ CREATE TABLE sample (
 
 CREATE TABLE report (
     id VARCHAR(36) PRIMARY KEY,
-    request_id VARCHAR(36) NOT NULL REFERENCES request(id),
-    task_id VARCHAR(36) REFERENCES analysis_task(id),
-    author_id VARCHAR(36) NOT NULL REFERENCES sys_user(id),
+    request_id VARCHAR(36) NOT NULL,
+    task_id VARCHAR(36),
+    author_id VARCHAR(36) NOT NULL,
     version_number VARCHAR(20) NOT NULL DEFAULT 'V1.0',
     revision_note TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'IN_REVIEW', 'APPROVED', 'REVISING')),
@@ -320,7 +320,7 @@ CREATE TABLE report (
     pdf_url VARCHAR(1000),
     sharepoint_file_id VARCHAR(200),
     sharepoint_edit_url VARCHAR(1000),
-    approved_by VARCHAR(36) REFERENCES sys_user(id),
+    approved_by VARCHAR(36),
     approved_at TIMESTAMP,
     submitted_at TIMESTAMP,
     created_by VARCHAR(36),
@@ -333,7 +333,7 @@ CREATE TABLE report (
 
 CREATE TABLE report_revision (
     id VARCHAR(36) PRIMARY KEY,
-    report_id VARCHAR(36) NOT NULL REFERENCES report(id),
+    report_id VARCHAR(36) NOT NULL,
     version_number VARCHAR(20) NOT NULL,
     revision_note TEXT,
     file_url VARCHAR(1000),
@@ -349,7 +349,7 @@ CREATE TABLE report_revision (
 
 CREATE TABLE equipment_repair (
     id VARCHAR(36) PRIMARY KEY,
-    equipment_id VARCHAR(36) NOT NULL REFERENCES equipment(id),
+    equipment_id VARCHAR(36) NOT NULL,
     report_date DATE NOT NULL,
     fault_description TEXT NOT NULL,
     repair_action TEXT,
