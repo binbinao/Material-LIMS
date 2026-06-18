@@ -41,6 +41,17 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- Issue #7: Flyway for versioned schema migrations. The reordered
+                 schema.sql now also lives at db/migration/V1__init.sql so
+                 spring-boot's Flyway autoconfig picks it up out of the
+                 classpath at startup. flyway-core 9.x (managed by
+                 spring-boot-starter-parent 3.2.5) includes PostgreSQL
+                 support natively; no separate flyway-database-postgresql
+                 artifact is needed. -->
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
