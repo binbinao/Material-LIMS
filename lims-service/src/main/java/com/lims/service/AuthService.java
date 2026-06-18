@@ -7,6 +7,12 @@ import com.lims.common.exception.ErrorCode;
 import com.lims.common.security.JwtTokenProvider;
 import com.lims.dao.mapper.SysUserMapper;
 import com.lims.model.entity.SysUser;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,8 +28,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -49,6 +59,11 @@ public class AuthService {
 
     @Value("${azure.ad.enabled:false}")
     private boolean azureAdEnabled;
+
+    /** Cached JWKS for the tenant. Refreshed on miss / parse failure. */
+    private JWKSet cachedJwks;
+    private Instant cachedJwksFetchedAt;
+    private static final long JWKS_CACHE_TTL_SECONDS = 600;  // 10 min
 
     /**
      * Build Azure AD authorization URL for SSO login
@@ -144,16 +159,95 @@ public class AuthService {
 
     private Map<String, Object> parseIdTokenClaims(String idToken) {
         try {
-            cn.hutool.json.JSONObject json = JWTUtil.parseToken(idToken).getPayloads();
-            Map<String, Object> map = new HashMap<>();
-            for (String key : json.keySet()) {
-                map.put(key, json.get(key));
+            // Issue #3: verify the id_token signature against Azure AD's JWKS
+            // before trusting any claim. Without this, any caller with network
+            // access to /api/v1/auth/callback can mint a self-signed id_token
+            // and have the server issue a LIMS JWT for any email they choose.
+            SignedJWT signed = SignedJWT.parse(idToken);
+            JWKSet jwks = loadJwks();
+            String kid = signed.getHeader().getKeyID();
+            RSAKey rsaKey = (RSAKey) jwks.getKeyByKeyId(kid);
+            if (rsaKey == null) {
+                throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                        "id_token signed by unknown key id: " + kid);
             }
+            JWSVerifier verifier = new RSASSAVerifier(rsaKey.toRSAPublicKey());
+            if (!signed.verify(verifier)) {
+                throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                        "id_token signature verification failed");
+            }
+            JWTClaimsSet claims = signed.getJWTClaimsSet();
+
+            // iss must match https://login.microsoftonline.com/{tenantId}/v2.0
+            String expectedIssuer = "https://login.microsoftonline.com/" + tenantId + "/v2.0";
+            if (claims.getIssuer() == null || !claims.getIssuer().equals(expectedIssuer)) {
+                throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                        "id_token issuer mismatch: expected " + expectedIssuer +
+                                ", got " + claims.getIssuer());
+            }
+
+            // aud must contain the configured client_id
+            List<String> aud = claims.getAudience();
+            if (aud == null || !aud.contains(clientId)) {
+                throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                        "id_token audience mismatch: expected to contain " + clientId +
+                                ", got " + aud);
+            }
+
+            // exp must be in the future
+            Date exp = claims.getExpirationTime();
+            if (exp == null || exp.toInstant().isBefore(Instant.now())) {
+                throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                        "id_token expired or has no exp claim");
+            }
+
+            // nbf (if present) must not be in the future
+            Date nbf = claims.getNotBeforeTime();
+            if (nbf != null && nbf.toInstant().isAfter(Instant.now())) {
+                throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
+                        "id_token not yet valid (nbf in the future)");
+            }
+
+            Map<String, Object> map = new HashMap<>(claims.getClaims());
             return map;
-        } catch (Exception e) {
+        } catch (BusinessException e) {
+            throw e;
+        } catch (ParseException | com.nimbusds.jose.JOSEException | java.io.IOException e) {
+            log.error("id_token verification failed", e);
             throw new BusinessException(ErrorCode.M365_INTEGRATION_ERROR,
-                    "Failed to parse id_token: " + e.getMessage());
+                    "Failed to verify id_token: " + e.getMessage());
         }
+    }
+
+    /**
+     * Fetch the Azure AD JWKS for the configured tenant, with a 10-minute TTL.
+     * On a miss or parse failure, re-fetch once.
+     */
+    private JWKSet loadJwks() throws java.io.IOException, java.text.ParseException {
+        if (cachedJwks != null && cachedJwksFetchedAt != null &&
+                Instant.now().getEpochSecond() - cachedJwksFetchedAt.getEpochSecond() < JWKS_CACHE_TTL_SECONDS) {
+            return cachedJwks;
+        }
+        String jwksUrl = "https://login.microsoftonline.com/" + tenantId + "/discovery/v2.0/keys";
+        String body;
+        try {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<String> resp = restTemplate.getForEntity(jwksUrl, String.class);
+            body = resp.getBody();
+        } catch (Exception e) {
+            // cache-bust and rethrow
+            cachedJwks = null;
+            cachedJwksFetchedAt = null;
+            throw e;
+        }
+        if (body == null) {
+            cachedJwks = null;
+            cachedJwksFetchedAt = null;
+            throw new java.io.IOException("Azure AD JWKS endpoint returned empty body");
+        }
+        cachedJwks = JWKSet.parse(body);
+        cachedJwksFetchedAt = Instant.now();
+        return cachedJwks;
     }
 
     private static String firstNonBlank(String... values) {
