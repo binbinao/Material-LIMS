@@ -24,6 +24,7 @@ public class EquipmentRepairController {
     private final EquipmentRepairService service;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<EquipmentRepair>> list(@RequestParam(defaultValue = "1") int page,
                                          @RequestParam(defaultValue = "20") int size,
                                          @RequestParam(required = false) String status,
@@ -32,6 +33,7 @@ public class EquipmentRepairController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<EquipmentRepair> getById(@PathVariable String id) {
         return R.ok(service.getById(id));
     }
