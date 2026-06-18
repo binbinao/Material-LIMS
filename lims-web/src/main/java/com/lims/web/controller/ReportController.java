@@ -24,6 +24,7 @@ public class ReportController {
     private final ReportService reportService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<Report>> list(@RequestParam(defaultValue = "1") int page,
                                  @RequestParam(defaultValue = "20") int size,
                                  @RequestParam(required = false) String status,
@@ -32,17 +33,20 @@ public class ReportController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<Report> getById(@PathVariable String id) {
         return R.ok(reportService.getById(id));
     }
 
     @GetMapping("/{id}/edit-url")
+    @PreAuthorize("hasAnyRole('ENGINEER','MANAGER','ADMIN')")
     @Operation(summary = "Get Microsoft 365 online edit URL")
     public R<String> getEditUrl(@PathVariable String id) {
         return R.ok(reportService.getEditUrl(id));
     }
 
     @PostMapping("/{id}/sync")
+    @PreAuthorize("hasAnyRole('ENGINEER','MANAGER','ADMIN')")
     @Operation(summary = "Sync report content from SharePoint")
     @AuditLog(module = "REPORT", action = "SYNC")
     public R<Void> syncFromSharePoint(@PathVariable String id) {

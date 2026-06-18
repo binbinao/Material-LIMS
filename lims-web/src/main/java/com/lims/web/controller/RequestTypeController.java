@@ -21,11 +21,13 @@ public class RequestTypeController {
     private final RequestTypeService requestTypeService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<RequestType>> list(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int size) {
         return R.ok(requestTypeService.list(page, size));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<RequestType> getById(@PathVariable String id) {
         return R.ok(requestTypeService.getById(id));
     }

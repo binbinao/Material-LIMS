@@ -24,6 +24,7 @@ public class DepartmentController {
     private final DepartmentService departmentService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<?> list(@RequestParam(required = false) Integer page,
                      @RequestParam(required = false, defaultValue = "20") Integer size) {
         if (page != null) {
@@ -34,12 +35,14 @@ public class DepartmentController {
     }
 
     @GetMapping("/tree")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get department tree structure")
     public R<List<Map<String, Object>>> tree() {
         return R.ok(departmentService.tree());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<Department> getById(@PathVariable String id) {
         return R.ok(departmentService.getById(id));
     }

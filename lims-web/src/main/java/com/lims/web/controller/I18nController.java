@@ -19,6 +19,7 @@ public class I18nController {
     private final I18nService i18nService;
 
     @GetMapping("/messages")
+    @PreAuthorize("permitAll()")
     public R<Map<String, String>> getMessages(@RequestParam(defaultValue = "zh-CN") String locale) {
         return R.ok(i18nService.getMessages(locale));
     }

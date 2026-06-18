@@ -126,6 +126,7 @@ public class DashboardController {
     }
 
     @GetMapping("/equipment-stats")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> equipmentStats() {
         return R.ok(Map.of("statusCounts", equipmentService.getStatusStats()));
     }

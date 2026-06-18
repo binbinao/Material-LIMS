@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -31,12 +32,14 @@ public class AuthController {
     private boolean cookieSecure;
 
     @GetMapping("/azure-ad-login")
+    @PreAuthorize("permitAll()")
     @Operation(summary = "Get Azure AD login redirect URL")
     public R<Map<String, String>> azureAdLogin(HttpSession session) {
         return R.ok(Map.of("authorizationUrl", authService.getAuthorizationUrl(session)));
     }
 
     @PostMapping("/callback")
+    @PreAuthorize("permitAll()")
     @Operation(summary = "Azure AD OAuth callback endpoint (response_mode=form_post)")
     public R<Map<String, Object>> callback(@RequestParam String code,
                                            @RequestParam String state,
@@ -57,6 +60,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Logout - clear LIMS_TOKEN cookie")
     public R<Void> logout(HttpServletResponse response) {
         Cookie cookie = new Cookie(JwtAuthenticationFilter.COOKIE_NAME, "");
@@ -69,6 +73,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get current user info")
     public R<SysUser> me() {
         String userId = SecurityUtils.getCurrentUserId();
@@ -80,6 +85,7 @@ public class AuthController {
     }
 
     @PutMapping("/me/locale")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Switch user interface language")
     public R<Void> updateLocale(@RequestBody Map<String, String> body) {
         // TODO: persist locale preference on sys_user when locale column is added.
