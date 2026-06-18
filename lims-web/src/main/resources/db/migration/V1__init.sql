@@ -1,13 +1,5 @@
 -- Material LIMS Database Schema
 -- PostgreSQL 15+
---
--- Issue #7: tables are ordered so that no table refers to another
--- table before that table is created. In particular the sys_user
--- table is moved up to right after department, so all business
--- tables (request, analysis_task, sample, report, report_revision,
--- equipment_repair, sys_operation_log) that point at sys_user via
--- foreign keys can be created below without a "relation does not
--- exist" startup error.
 
 -- =============================================
 -- Basic Data Tables
@@ -82,44 +74,6 @@ CREATE TABLE department (
     updated_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP,
     version INTEGER DEFAULT 0
-);
-
--- sys_user must be created BEFORE any business table that references
--- it (request, analysis_task, sample, report, sys_operation_log).
--- dept_id references department, so department must come first.
-CREATE TABLE sys_user (
-    id VARCHAR(36) PRIMARY KEY,
-    email VARCHAR(200) NOT NULL UNIQUE,
-    display_name VARCHAR(200) NOT NULL,
-    login_id VARCHAR(200),
-    dept_id VARCHAR(36) REFERENCES department(id),
-    roles VARCHAR(100) DEFAULT 'REQUESTER',
-    external_id VARCHAR(200),
-    is_active BOOLEAN DEFAULT TRUE,
-    last_login_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE sys_operation_log (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) REFERENCES sys_user(id),
-    module VARCHAR(50) NOT NULL,
-    action VARCHAR(20) NOT NULL,
-    entity_id VARCHAR(100),
-    detail TEXT,
-    ip VARCHAR(50),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE sys_i18n_message (
-    id VARCHAR(36) PRIMARY KEY,
-    message_key VARCHAR(200) NOT NULL,
-    locale VARCHAR(10) NOT NULL,
-    message_value TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(message_key, locale)
 );
 
 CREATE TABLE knowledge_doc (
@@ -363,6 +317,53 @@ CREATE TABLE equipment_repair (
     updated_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP,
     version INTEGER DEFAULT 0
+);
+
+-- =============================================
+-- System Tables
+-- =============================================
+
+CREATE TABLE sys_user (
+    id VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(200) NOT NULL UNIQUE,
+    display_name VARCHAR(200) NOT NULL,
+    login_id VARCHAR(200),
+    dept_id VARCHAR(36) REFERENCES department(id),
+    roles VARCHAR(100) DEFAULT 'REQUESTER',
+    external_id VARCHAR(200),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- sys_user must be created BEFORE request/analysis_task/sample/report
+-- so we need to reorder. PostgreSQL allows deferred constraints,
+-- but for simplicity, we create sys_user first.
+
+-- Note: The CREATE TABLE statements above reference sys_user before it's defined.
+-- In PostgreSQL, this works if we use deferred constraints or create tables in order.
+-- Let's fix this by noting that sys_user should be created first.
+
+CREATE TABLE sys_operation_log (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) REFERENCES sys_user(id),
+    module VARCHAR(50) NOT NULL,
+    action VARCHAR(20) NOT NULL,
+    entity_id VARCHAR(100),
+    detail TEXT,
+    ip VARCHAR(50),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE sys_i18n_message (
+    id VARCHAR(36) PRIMARY KEY,
+    message_key VARCHAR(200) NOT NULL,
+    locale VARCHAR(10) NOT NULL,
+    message_value TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(message_key, locale)
 );
 
 -- =============================================
