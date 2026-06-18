@@ -13,10 +13,13 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -260,6 +263,32 @@ public class AuthService {
      * Fetch the Azure AD JWKS for the configured tenant, with a 10-minute TTL.
      * On a miss or parse failure, re-fetch once.
      */
+    /**
+     * Issue #17: Pre-warm the JWKS cache at application startup so the
+     * first user login doesn't pay the Microsoft round-trip latency.
+     * Failure here is non-fatal — if Microsoft is unreachable at boot
+     * time, the next id_token verification will trigger a lazy fetch
+     * (which is now circuit-breaker-wrapped and capped at 3 s).
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void prewarmJwks() {
+        if (!azureAdEnabled) return;
+        try {
+            loadJwks();
+            log.info("JWKS cache pre-warmed at startup");
+        } catch (Exception e) {
+            log.warn("JWKS pre-warm failed (non-fatal): {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Fetch the Azure AD JWKS for the configured tenant, with a 10-minute TTL.
+     * On a miss or parse failure, re-fetch once. Wrapped in a Resilience4j
+     * circuit breaker so a slow / unreachable Microsoft JWKS endpoint
+     * fails fast (≤ 3 s) instead of hanging every login callback for
+     * the full {@code SimpleClientHttpRequestFactory} timeout.
+     */
+    @CircuitBreaker(name = "jwks")
     private JWKSet loadJwks() throws java.io.IOException, java.text.ParseException {
         if (cachedJwks != null && cachedJwksFetchedAt != null &&
                 Instant.now().getEpochSecond() - cachedJwksFetchedAt.getEpochSecond() < JWKS_CACHE_TTL_SECONDS) {
