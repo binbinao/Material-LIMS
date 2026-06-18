@@ -35,7 +35,7 @@ const Workspace: React.FC = () => {
         </Col>
         <Col span={6}>
           <Card hoverable onClick={() => history.push('/request/kanban')}>
-            <Statistic title="Active Requests" value={requestStats.SUBMITTED || 0 + requestStats.ASSIGNED || 0} />
+            <Statistic title="Active Requests" value={(requestStats.SUBMITTED || 0) + (requestStats.ASSIGNED || 0)} />
           </Card>
         </Col>
         <Col span={6}>
