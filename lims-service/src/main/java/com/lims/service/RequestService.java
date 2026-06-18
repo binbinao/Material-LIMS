@@ -297,11 +297,21 @@ public class RequestService {
                             .eq(AnalysisTask::getRequestId, task.getRequestId())
                             .ne(AnalysisTask::getStatus, "COMPLETED"));
             if (pendingCount == 0) {
-                // All tasks done, auto-transition to APPROVING
-                Request request = requestMapper.selectById(task.getRequestId());
-                if (request != null && RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
-                    request.setStatus(RequestStatus.APPROVING.getValue());
-                    requestMapper.updateById(request);
+                // Issue #20: only MANAGER/ADMIN may auto-advance to APPROVING.
+                // The assignee (ENGINEER/TECHNICIAN) finishing their own
+                // task must NOT silently flip the request into manager-review
+                // state — that bypasses the manager's manual review step in
+                // the BPMN flow. The request stays in REPORTING until a
+                // manager explicitly approves.
+                JwtTokenProvider.AuthPrincipal p2 = SecurityUtils.getCurrentPrincipal();
+                boolean callerCanAdvance = p2 != null
+                        && (p2.hasRole("ADMIN") || p2.hasRole("MANAGER"));
+                if (callerCanAdvance) {
+                    Request request = requestMapper.selectById(task.getRequestId());
+                    if (request != null && RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
+                        request.setStatus(RequestStatus.APPROVING.getValue());
+                        requestMapper.updateById(request);
+                    }
                 }
             }
         }
