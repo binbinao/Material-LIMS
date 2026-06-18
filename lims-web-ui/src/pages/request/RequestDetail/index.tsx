@@ -92,6 +92,7 @@ const RequestDetail: React.FC = () => {
         case 'submit':
           await submitRequest(params.id);
           message.success('Request submitted');
+          refresh();
           break;
         case 'reject':
           modal.confirm({
@@ -146,13 +147,14 @@ const RequestDetail: React.FC = () => {
         case 'start-reporting':
           await startReporting(params.id);
           message.success('Reporting phase started');
+          refresh();
           break;
         case 'complete':
           await completeRequest(params.id);
           message.success('Request completed');
+          refresh();
           break;
       }
-      refresh();
     } catch {
       message.error('Action failed');
     }
