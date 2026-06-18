@@ -61,9 +61,10 @@ const AnalysisItemList: React.FC = () => {
           try {
             const result = await getAnalysisItems({ page: params.current, size: params.pageSize });
             return { data: result?.data?.records ?? [], total: result?.data?.total ?? 0, success: result?.code === 200 };
-          } catch {
-            return { data: [], total: 0, success: false };
-          }
+          } catch (e: any) {
+          message.error(e?.message || 'Load failed');
+          return { data: [], total: 0, success: false };
+        }
         }}
         rowKey="id" search={{ labelWidth: 'auto' }}
         toolBarRender={() => [
