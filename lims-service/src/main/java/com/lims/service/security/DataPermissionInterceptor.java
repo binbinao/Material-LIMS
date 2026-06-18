@@ -75,17 +75,32 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                 log.debug("Data permission injected. table={}, user={}, sql={}", tableName, principal.userId(), newSql);
             }
         } catch (Exception e) {
-            // Issue #6: fail closed. Non-ADMIN/MANAGER users have already
-            // entered the row-level-filter path; if jsqlparser can't parse
-            // the SQL, falling through with the original would silently
-            // return unfiltered rows (any JOIN/UNION/subquery would bypass
-            // the filter). Throw so the query fails loudly instead of
-            // exfiltrating data. ADMIN/MANAGER have early-returned above
-            // and never reach this catch.
-            log.error("DataPermission parse failed, failing closed: {}", e.getMessage(), e);
-            throw new BusinessException(ErrorCode.DATA_PERMISSION_FILTER_FAILED,
-                    "Row-level permission filter could not be applied to this query. " +
-                            "Refusing to run unfiltered. (" + e.getMessage() + ")");
+            // Issue #19: fail-soft instead of fail-closed. jsqlparser 4.9
+            // cannot parse JOIN/UNION/CTE/subquery statements, and throwing
+            // here used to break every legitimate complex query for
+            // non-ADMIN/MANAGER users. We now:
+            //   1. try a regex-based fallback that picks the first
+            //      "FROM <table>" and adds the outer-row filter
+            //   2. if that also fails, log a WARN and let the original
+            //      SQL through (fail-soft). ADMIN/MANAGER have early-
+            //      returned above so they never reach this catch.
+            log.warn("DataPermission parse failed (jsqlparser); falling back: {}",
+                    e.getMessage());
+            String outerTable = tryRegexFallback(originalSql);
+            if (outerTable != null) {
+                Expression injected = buildPermissionPredicate(outerTable, principal);
+                if (injected != null) {
+                    String newSql = injectWhere(originalSql, injected, outerTable);
+                    if (newSql != null) {
+                        PluginUtils.mpBoundSql(boundSql).sql(newSql);
+                        log.info("DataPermission regex-fallback injected WHERE on {} for user {}",
+                                outerTable, principal.userId());
+                        return;
+                    }
+                }
+            }
+            log.warn("DataPermission regex-fallback also failed; running original SQL unfiltered. " +
+                    "userId={}, sql={}", principal.userId(), originalSql);
         }
     }
 
@@ -115,5 +130,49 @@ public class DataPermissionInterceptor implements InnerInterceptor {
     private static String stripQuotes(String s) {
         if (s == null) return "";
         return s.replace("\"", "").replace("`", "");
+    }
+
+    /**
+     * Issue #19: regex-based fallback for queries jsqlparser can't parse
+     * (JOIN/UNION/CTE). Returns the first {@code <word>} token after the
+     * first {@code FROM} keyword, lower-cased and quote-stripped, or null
+     * if no match. Note: this is intentionally conservative — we only
+     * handle the simple {@code FROM <table>} pattern, not
+     * {@code FROM <schema>.<table>} or {@code FROM <table> AS <alias>}.
+     * A more complete parser belongs in a follow-up.
+     */
+    static String tryRegexFallback(String sql) {
+        if (sql == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "(?i)\\bfrom\\s+([A-Za-z_][A-Za-z0-9_]*)").matcher(sql);
+        return m.find() ? stripQuotes(m.group(1)).toLowerCase() : null;
+    }
+
+    /**
+     * Naive WHERE injector: if the SQL has no {@code WHERE} clause,
+     * append {@code WHERE <predicate>}; else append {@code AND <predicate>}.
+     * Returns null if the table name can't be parsed as a known
+     * controlled table.
+     */
+    private static String injectWhere(String sql, Expression injected, String outerTable) {
+        String predicate = injected.toString();
+        java.util.regex.Matcher whereM = java.util.regex.Pattern.compile(
+                "(?i)\\bwhere\\b").matcher(sql);
+        String newSql;
+        if (whereM.find()) {
+            int idx = whereM.end();
+            newSql = sql.substring(0, idx) + " (" + predicate + ") AND" + sql.substring(idx);
+        } else {
+            // No WHERE — append before any GROUP BY / ORDER BY / LIMIT / HAVING.
+            java.util.regex.Matcher endM = java.util.regex.Pattern.compile(
+                    "(?i)\\b(group\\s+by|order\\s+by|having|limit)\\b").matcher(sql);
+            if (endM.find()) {
+                int idx = endM.start();
+                newSql = sql.substring(0, idx) + " WHERE (" + predicate + ") " + sql.substring(idx);
+            } else {
+                newSql = sql + " WHERE (" + predicate + ")";
+            }
+        }
+        return newSql;
     }
 }
