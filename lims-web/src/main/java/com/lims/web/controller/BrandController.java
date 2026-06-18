@@ -23,6 +23,7 @@ public class BrandController {
 
     @Operation(summary = "List brands with pagination")
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<Brand>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -35,6 +36,7 @@ public class BrandController {
 
     @Operation(summary = "Get brand by ID")
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<Brand> getById(@PathVariable String id) {
         return R.ok(brandMapper.selectById(id));
     }

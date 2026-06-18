@@ -26,6 +26,7 @@ public class HolidayController {
     private final HolidayService holidayService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<Holiday>> list(@RequestParam(defaultValue = "1") int page,
                                  @RequestParam(defaultValue = "20") int size,
                                  @RequestParam(required = false) Integer year) {
@@ -33,6 +34,7 @@ public class HolidayController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<Holiday> getById(@PathVariable String id) {
         return R.ok(holidayService.getById(id));
     }
@@ -71,6 +73,7 @@ public class HolidayController {
 
     @Operation(summary = "Compute due date by skipping holidays/weekends")
     @GetMapping("/calculate-due-date")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> calcDueDate(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate baseDate,
             @RequestParam int days) {
@@ -80,6 +83,7 @@ public class HolidayController {
 
     @Operation(summary = "Check whether the given date is a business day")
     @GetMapping("/is-business-day")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> isBusinessDay(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return R.ok(Map.of("date", date, "isBusinessDay", holidayService.isBusinessDay(date)));
@@ -87,6 +91,7 @@ public class HolidayController {
 
     @Operation(summary = "Count business days between [from, to] (inclusive)")
     @GetMapping("/count-business-days")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> countBusinessDays(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {

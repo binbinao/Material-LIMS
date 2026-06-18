@@ -24,6 +24,7 @@ public class AnalysisItemController {
     private final AnalysisItemService analysisItemService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<Page<AnalysisItem>> list(@RequestParam(defaultValue = "1") int page,
                                        @RequestParam(defaultValue = "20") int size,
                                        @RequestParam(required = false) String groupId,
@@ -32,18 +33,21 @@ public class AnalysisItemController {
     }
 
     @GetMapping("/by-group/{groupId}")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "List items by test group")
     public R<List<AnalysisItem>> listByGroup(@PathVariable String groupId) {
         return R.ok(analysisItemService.listByGroup(groupId));
     }
 
     @GetMapping("/cascade")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get cascade data for frontend selection")
     public R<List<AnalysisItemCascadeVO>> cascade() {
         return R.ok(analysisItemService.cascade());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<AnalysisItem> getById(@PathVariable String id) {
         return R.ok(analysisItemService.getById(id));
     }
