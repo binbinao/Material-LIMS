@@ -48,6 +48,18 @@
             <artifactId>poi-tl</artifactId>
         </dependency>
         <dependency>
+            <!-- Issue #22: declare nimbus-jose-jwt explicitly. AuthService
+                 uses com.nimbusds.jose.* / com.nimbusds.jwt.* to verify the
+                 Azure AD id_token signature. Without an explicit
+                 declaration, the dep is only pulled transitively via
+                 spring-boot-starter-oauth2-resource-server in lims-web —
+                 a Spring Boot version bump could swap it out and silently
+                 break authentication. -->
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>9.37.3</version>
+        </dependency>
+        <dependency>
             <groupId>com.microsoft.graph</groupId>
             <artifactId>microsoft-graph</artifactId>
         </dependency>
