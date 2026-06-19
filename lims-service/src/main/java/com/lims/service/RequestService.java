@@ -137,13 +137,22 @@ public class RequestService {
             throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID);
         }
 
-        // Assign engineers to analysis tasks
+        // Assign engineers to analysis tasks. Issue #36 L-7: validate
+        // that each taskId actually belongs to the request — silently
+        // skipping wrong-task DTOs was confusing for the API client.
         for (AnalysisTaskAssignDTO assignment : assignments) {
             AnalysisTask task = analysisTaskMapper.selectById(assignment.getTaskId());
-            if (task != null && task.getRequestId().equals(requestId)) {
-                task.setAssigneeId(assignment.getEngineerId());
-                analysisTaskMapper.updateById(task);
+            if (task == null) {
+                throw new BusinessException(ErrorCode.DATA_NOT_FOUND,
+                        "Analysis task not found: " + assignment.getTaskId());
             }
+            if (!task.getRequestId().equals(requestId)) {
+                throw new BusinessException(ErrorCode.DATA_NOT_FOUND,
+                        "Analysis task " + assignment.getTaskId()
+                                + " does not belong to request " + requestId);
+            }
+            task.setAssigneeId(assignment.getEngineerId());
+            analysisTaskMapper.updateById(task);
         }
 
         if (priority != null) {
@@ -387,6 +396,6 @@ public class RequestService {
             nextNum = Integer.parseInt(numPart) + 1;
         }
 
-        return prefix + String.format("%04d", nextNum);
+        return prefix + String.format("%05d", nextNum);
     }
 }
