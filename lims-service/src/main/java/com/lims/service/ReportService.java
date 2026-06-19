@@ -51,9 +51,17 @@ public class ReportService {
     }
 
     public List<Report> getRevisions(String reportId) {
+        // Issue #60 (P1): the caller passes a report id, but the
+        // conceptual query is "all reports that have ever been generated
+        // for this request" — i.e. all rows whose request_id matches the
+        // parent report's request_id. The original implementation
+        // filtered by report.id (== only the current row), hiding the
+        // revision history.
+        Report current = reportMapper.selectById(reportId);
+        if (current == null) return List.of();
         return reportMapper.selectList(
                 new LambdaQueryWrapper<Report>()
-                        .eq(Report::getId, reportId)
+                        .eq(Report::getRequestId, current.getRequestId())
                         .orderByDesc(Report::getVersionNumber));
     }
 
