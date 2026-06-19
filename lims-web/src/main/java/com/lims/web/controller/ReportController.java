@@ -56,7 +56,7 @@ public class ReportController {
 
     @PostMapping("/requests/{requestId}/reports")
     @Operation(summary = "Create a new report for a request")
-    @PreAuthorize("hasAnyRole('ENGINEER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ENGINEER', 'MANAGER', 'ADMIN')")
     @AuditLog(module = "REPORT", action = "CREATE")
     public R<Report> create(@PathVariable String requestId) {
         return R.ok(reportService.createReport(requestId, SecurityUtils.getCurrentUserId()));
@@ -73,7 +73,7 @@ public class ReportController {
 
     @PostMapping("/{id}/approve")
     @Operation(summary = "Approve report")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     @AuditLog(module = "REPORT", action = "APPROVE")
     public R<Void> approve(@PathVariable String id) {
         reportService.approveReport(id, SecurityUtils.getCurrentUserId());
@@ -82,7 +82,7 @@ public class ReportController {
 
     @PostMapping("/{id}/reject")
     @Operation(summary = "Reject report, return to engineer")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     @AuditLog(module = "REPORT", action = "REJECT")
     public R<Void> reject(@PathVariable String id) {
         reportService.rejectReport(id);
