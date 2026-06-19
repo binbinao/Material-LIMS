@@ -85,7 +85,7 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     @AuditLog(module = "REPORT", action = "REJECT")
     public R<Void> reject(@PathVariable String id) {
-        reportService.rejectReport(id);
+        reportService.rejectReport(id, SecurityUtils.getCurrentUserId());
         return R.ok();
     }
 

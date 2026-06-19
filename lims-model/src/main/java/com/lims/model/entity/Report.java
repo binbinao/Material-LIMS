@@ -23,5 +23,7 @@ public class Report extends BaseEntity {
     private String sharepointEditUrl;
     private String approvedBy;
     private LocalDateTime approvedAt;
+    private String rejectedBy;
+    private LocalDateTime rejectedAt;
     private LocalDateTime submittedAt;
 }

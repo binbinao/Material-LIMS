@@ -163,14 +163,17 @@ public class ReportService {
      * Reject report (return to engineer for revision)
      */
     @Transactional(rollbackFor = Exception.class)
-    public void rejectReport(String reportId) {
+    public void rejectReport(String reportId, String managerId) {
         Report report = reportMapper.selectById(reportId);
         if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
 
         report.setStatus(ReportStatus.REVISING.getValue());
+        report.setRejectedBy(managerId);
+        report.setRejectedAt(LocalDateTime.now());
         reportMapper.updateById(report);
 
-        log.info("Rejected report, returned for revision: reportId={}", reportId);
+        log.info("Rejected report, returned for revision: reportId={}, rejectedBy={}",
+                reportId, managerId);
     }
 
     /**
