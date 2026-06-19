@@ -115,6 +115,14 @@ public class ReportService {
         if (!ReportStatus.IN_REVIEW.getValue().equals(report.getStatus())) {
             throw new BusinessException(ErrorCode.REPORT_NOT_EDITABLE);
         }
+        // Issue #52 (P4): four-eyes principle. The author may not approve
+        // their own report — even if they also hold a MANAGER/ADMIN role.
+        // Without this guard, the dev user (and any manager who authors a
+        // report) could self-approve, bypassing the review step entirely.
+        if (report.getAuthorId() != null && report.getAuthorId().equals(managerId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                    "Approver must not be the report author");
+        }
 
         report.setStatus(ReportStatus.APPROVED.getValue());
         report.setApprovedBy(managerId);
