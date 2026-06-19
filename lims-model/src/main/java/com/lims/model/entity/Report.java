@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 public class Report extends BaseEntity {
 
     private String requestId;
-    private String taskId;
     private String authorId;
     private String versionNumber;
     private String revisionNote;
