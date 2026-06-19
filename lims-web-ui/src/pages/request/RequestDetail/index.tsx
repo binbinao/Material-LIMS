@@ -3,7 +3,7 @@ import { Card, Descriptions, Tag, Button, Steps, Table, Modal, Form, Input, App,
 import { useParams, history } from '@umijs/max';
 import { useRequest } from 'ahooks';
 import { useState } from 'react';
-import { getRequest, getRequestTasks, getRequestWorkflow, submitRequest, assignRequest, rejectRequest, receiveSample, startReporting, completeRequest, updateAnalysisTask, getAdminUsers } from '@/services/requestService';
+import { getRequest, getRequestTasks, getRequestWorkflow, submitRequest, assignRequest, rejectRequest, receiveSample, startReporting, completeRequest, updateAnalysisTask, getAdminUsers, createReport } from '@/services/requestService';
 import dayjs from 'dayjs';
 
 const statusMap: Record<string, { color: string; text: string }> = {
@@ -52,6 +52,7 @@ const RequestDetail: React.FC = () => {
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignMap, setAssignMap] = useState<Record<string, string>>({});
+  const [creatingReport, setCreatingReport] = useState(false);
 
   // Issue #11: Form instances for the reject-modal and the
   // receive-sample-modal. Reading values via document.getElementById
@@ -298,6 +299,41 @@ const RequestDetail: React.FC = () => {
                 <Descriptions.Item label="Current Task">{workflow.taskName || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Assignee">{workflow.assignee || '-'}</Descriptions.Item>
               </Descriptions>
+            </Card>
+          )}
+
+          {/* Issue #56 (P2): expose createReport() so the Report workflow
+              is reachable from the UI. The button appears once the request
+              has tasks/results worth reporting (REPORTING, APPROVING, or
+              COMPLETED). Gated on ENGINEER/MANAGER/ADMIN per backend
+              @PreAuthorize. */}
+          {(req?.status === 'REPORTING' || req?.status === 'APPROVING' || req?.status === 'COMPLETED')
+            && (access.canEngineer || access.canManager) && (
+            <Card title="Report">
+              <Button
+                key="generate-report"
+                type="primary"
+                loading={creatingReport}
+                onClick={async () => {
+                  setCreatingReport(true);
+                  try {
+                    const res = await createReport(params.id);
+                    if (res?.code === 200 && res?.data?.id) {
+                      message.success('Report generated');
+                      history.push(`/report/${res.data.id}`);
+                    } else {
+                      message.success('Report generated');
+                      refresh();
+                    }
+                  } catch {
+                    message.error('Failed to generate report');
+                  } finally {
+                    setCreatingReport(false);
+                  }
+                }}
+              >
+                Generate Report
+              </Button>
             </Card>
           )}
 
