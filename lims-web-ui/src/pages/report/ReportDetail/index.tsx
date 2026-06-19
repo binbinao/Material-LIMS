@@ -10,7 +10,6 @@ const reportStatusMap: Record<string, { color: string; text: string }> = {
   IN_REVIEW: { color: 'processing', text: 'In Review' },
   APPROVED: { color: 'success', text: 'Approved' },
   REVISING: { color: 'warning', text: 'Revising' },
-  ARCHIVED: { color: 'default', text: 'Archived' },
 };
 
 const ReportDetail: React.FC = () => {
