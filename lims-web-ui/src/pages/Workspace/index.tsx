@@ -45,7 +45,7 @@ const Workspace: React.FC = () => {
         </Col>
         <Col span={6}>
           <Card hoverable>
-            <Statistic title="Overdue" value={stats?.overdue || 0} valueStyle={{ color: '#cf1322' }} />
+            <Statistic title={<span role="alert" aria-label="Overdue tasks">Overdue</span>} value={stats?.overdue || 0} valueStyle={{ color: '#cf1322' }} />
           </Card>
         </Col>
         <Col span={12}>
