@@ -6,8 +6,11 @@ import com.lims.common.exception.BusinessException;
 import com.lims.common.exception.ErrorCode;
 import com.lims.dao.mapper.AnalysisTaskMapper;
 import com.lims.dao.mapper.ReportMapper;
+import com.lims.dao.mapper.RequestMapper;
 import com.lims.model.entity.Report;
+import com.lims.model.entity.Request;
 import com.lims.model.enums.ReportStatus;
+import com.lims.model.enums.RequestStatus;
 import com.lims.service.report.ReportTemplateService;
 import com.lims.service.report.WordToPdfConverter;
 import com.lims.service.storage.FileStorageService;
@@ -29,6 +32,7 @@ public class ReportService {
     private final ReportMapper reportMapper;
     @SuppressWarnings("unused")
     private final AnalysisTaskMapper analysisTaskMapper;
+    private final RequestMapper requestMapper;
     private final ReportTemplateService reportTemplateService;
     private final WordToPdfConverter wordToPdfConverter;
     private final FileStorageService fileStorageService;
@@ -58,6 +62,21 @@ public class ReportService {
      */
     @Transactional(rollbackFor = Exception.class)
     public Report createReport(String requestId, String authorId) {
+        // Issue #58 (P5): a report is only meaningful once the request has
+        // results worth reporting. Reject when the parent request is still
+        // DRAFT/SUBMITTED/ASSIGNED/SAMPLING.
+        Request parent = requestMapper.selectById(requestId);
+        if (parent == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "Request not found: " + requestId);
+        }
+        String parentStatus = parent.getStatus();
+        if (!RequestStatus.REPORTING.getValue().equals(parentStatus)
+                && !RequestStatus.APPROVING.getValue().equals(parentStatus)
+                && !RequestStatus.COMPLETED.getValue().equals(parentStatus)) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID,
+                    "Request not in a reportable state (must be REPORTING, APPROVING, or COMPLETED)");
+        }
+
         Report report = new Report();
         report.setRequestId(requestId);
         report.setAuthorId(authorId);
