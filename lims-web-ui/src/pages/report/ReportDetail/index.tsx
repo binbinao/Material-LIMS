@@ -1,6 +1,6 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { Card, Descriptions, Tag, Button, Space, App, Modal, Form, Input } from 'antd';
-import { useParams, history } from '@umijs/max';
+import { useParams, history, useAccess, useModel } from '@umijs/max';
 import { useRequest } from 'ahooks';
 import { getReport, submitReport, approveReport, rejectReport, reviseReport, getReportEditUrl, syncReportFromSharePoint } from '@/services/requestService';
 import dayjs from 'dayjs';
@@ -24,9 +24,24 @@ const ReportDetail: React.FC = () => {
 
   // Issue #24: gate action buttons by role.
   const access = useAccess();
+  const { initialState } = useModel('@@initialState');
+  const currentUserId = initialState?.currentUser?.id;
 
   const { data: reportData, loading, refresh } = useRequest(() => getReport(params.id));
   const report = reportData?.data;
+
+  // Issue #54 (P8): only the report's author may Submit / Edit / Sync
+  // their own report. The backend's validateReportOwnership() rejects
+  // non-authors with ACCESS_DENIED — without this UI gate, any engineer
+  // or manager sees the Submit button and gets a confusing toast on click.
+  const isAuthor = !!report && !!currentUserId && report.authorId === currentUserId;
+
+  // Issue #54 (P8): only the report's author can Submit/Edit/Sync their own
+  // report. The backend's validateReportOwnership() rejects non-authors
+  // with ACCESS_DENIED; without this UI gate, any ENGINEER/MANAGER sees the
+  // Submit button and gets a confusing toast on click.
+  const currentUserId = useCurrentUserId();
+  const isAuthor = !!report && !!currentUserId && report.authorId === currentUserId;
 
   const handleAction = async (action: string) => {
     try {
@@ -90,7 +105,7 @@ const ReportDetail: React.FC = () => {
     switch (report.status) {
       case 'DRAFT':
       case 'REVISING':
-        if (access.canEngineer || access.canManager) {
+        if ((access.canEngineer || access.canManager) && isAuthor) {
           btns.push(
             <Button key="edit" onClick={() => handleAction('edit')}>Edit in M365</Button>,
             <Button key="sync" onClick={() => handleAction('sync')}>Sync from SharePoint</Button>,
