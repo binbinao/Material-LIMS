@@ -67,9 +67,10 @@ class SchemaNoPhysicalFksTest {
 
     @Test
     void docsAgreeOnNoPhysicalForeignKeys() throws Exception {
+        // Note: CODEBUDDY.md was removed in earlier cleanup — only CLAUDE.md
+        // and the design doc remain as authoritative references.
         for (String relPath : new String[]{
                 "CLAUDE.md",
-                "CODEBUDDY.md",
                 "docs/design/material-lims-design.md"}) {
             String content = readSource(relPath);
             assertTrue(

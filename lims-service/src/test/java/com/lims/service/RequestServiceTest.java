@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lims.common.exception.BusinessException;
 import com.lims.common.exception.ErrorCode;
+import com.lims.common.security.JwtTokenProvider;
+import com.lims.common.security.SecurityUtils;
 import com.lims.dao.mapper.*;
 import com.lims.model.dto.AnalysisTaskAssignDTO;
 import com.lims.model.dto.RequestCreateDTO;
@@ -13,6 +15,7 @@ import com.lims.model.entity.Request;
 import com.lims.model.entity.RequestType;
 import com.lims.model.enums.RequestStatus;
 import com.lims.workflow.WorkflowService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,6 +25,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -34,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 /**
@@ -69,6 +76,29 @@ class RequestServiceTest {
     private static final String USER_ID = "user-001";
     private static final String REQ_ID = "req-001";
 
+    /**
+     * Set the Spring Security principal so {@code SecurityUtils.getCurrentPrincipal()}
+     * returns a non-null principal with the given role set. Issue #20 made
+     * auto-advance REPORTING→APPROVING require MANAGER/ADMIN; tests for that
+     * path need to set the principal explicitly.
+     */
+    private void loginAs(String userId, String... roles) {
+        var principal = new JwtTokenProvider.AuthPrincipal(
+                userId, userId + "@lims.local", userId,
+                String.join(",", roles), null);
+        var auth = new UsernamePasswordAuthenticationToken(
+                principal, null,
+                java.util.Arrays.stream(roles)
+                        .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                        .toList());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
     private RequestCreateDTO baseCreateDTO() {
         RequestCreateDTO dto = new RequestCreateDTO();
         dto.setBrandId("brand-1");
@@ -100,7 +130,7 @@ class RequestServiceTest {
     class CreateRequest {
 
         @Test
-        @DisplayName("首个委托应生成编号 REQ-<年份>-0001 并置为 DRAFT 状态")
+        @DisplayName("首个委托应生成编号 REQ-<年份>-00001 并置为 DRAFT 状态")
         void shouldGenerateFirstRequestNoAndDraftStatus() {
             RequestCreateDTO dto = baseCreateDTO();
             dto.setAnalysisItemIds(null);
@@ -109,7 +139,9 @@ class RequestServiceTest {
 
             Request result = requestService.createRequest(dto, USER_ID);
 
-            String expectedNo = "REQ-" + LocalDate.now().getYear() + "-0001";
+            // Issue #36: padded to %05d so the format stays REQ-YYYY-NNNNN
+            // past 9999 requests per year (4-digit %04d broke at 10000).
+            String expectedNo = "REQ-" + LocalDate.now().getYear() + "-00001";
             assertThat(result.getRequestNo()).isEqualTo(expectedNo);
             assertThat(result.getStatus()).isEqualTo(RequestStatus.DRAFT.getValue());
             assertThat(result.getRequesterId()).isEqualTo(USER_ID);
@@ -118,18 +150,18 @@ class RequestServiceTest {
         }
 
         @Test
-        @DisplayName("已存在委托时编号应递增")
+        @DisplayName("已存在委托时编号应递增（5 位补零）")
         void shouldIncrementRequestNo() {
             RequestCreateDTO dto = baseCreateDTO();
             dto.setAnalysisItemIds(null);
             Request last = new Request();
-            last.setRequestNo("REQ-" + LocalDate.now().getYear() + "-0041");
+            last.setRequestNo("REQ-" + LocalDate.now().getYear() + "-00041");
             when(requestMapper.selectOne(any())).thenReturn(last);
             when(requestTypeMapper.selectById(anyString())).thenReturn(null);
 
             Request result = requestService.createRequest(dto, USER_ID);
 
-            assertThat(result.getRequestNo()).isEqualTo("REQ-" + LocalDate.now().getYear() + "-0042");
+            assertThat(result.getRequestNo()).isEqualTo("REQ-" + LocalDate.now().getYear() + "-00042");
         }
 
         @Test
@@ -393,7 +425,7 @@ class RequestServiceTest {
         }
 
         @Test
-        @DisplayName("任务不属于该委托时应跳过更新")
+        @DisplayName("任务不属于该委托时应抛 DATA_NOT_FOUND（issue #36：原为静默跳过）")
         void shouldSkipTaskFromOtherRequest() {
             Request request = requestWithStatus(RequestStatus.SUBMITTED);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
@@ -402,20 +434,24 @@ class RequestServiceTest {
             task.setRequestId("other-req");
             when(analysisTaskMapper.selectById("task-1")).thenReturn(task);
 
-            requestService.assignRequest(REQ_ID, List.of(assign("task-1", "eng-1")), null);
-
+            assertThatThrownBy(() ->
+                    requestService.assignRequest(REQ_ID, List.of(assign("task-1", "eng-1")), null))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("code").isEqualTo(ErrorCode.DATA_NOT_FOUND.getCode());
             verify(analysisTaskMapper, never()).updateById(any());
         }
 
         @Test
-        @DisplayName("任务不存在时应跳过更新")
+        @DisplayName("任务不存在时应抛 DATA_NOT_FOUND（issue #36：原为静默跳过）")
         void shouldSkipMissingTask() {
             Request request = requestWithStatus(RequestStatus.SUBMITTED);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
             when(analysisTaskMapper.selectById("task-x")).thenReturn(null);
 
-            requestService.assignRequest(REQ_ID, List.of(assign("task-x", "eng-1")), null);
-
+            assertThatThrownBy(() ->
+                    requestService.assignRequest(REQ_ID, List.of(assign("task-x", "eng-1")), null))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("code").isEqualTo(ErrorCode.DATA_NOT_FOUND.getCode());
             verify(analysisTaskMapper, never()).updateById(any());
         }
 
@@ -449,7 +485,7 @@ class RequestServiceTest {
     class RejectRequest {
 
         @Test
-        @DisplayName("驳回成功并完成工作流任务")
+        @DisplayName("驳回成功并完成工作流任务（currentUser 传 null）")
         void shouldRejectAndCompleteWorkflowTask() {
             Request request = requestWithStatus(RequestStatus.SUBMITTED);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
@@ -460,7 +496,9 @@ class RequestServiceTest {
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.REJECTED.getValue());
             verify(requestMapper).updateById(request);
-            verify(workflowService).completeTask(eq("t-1"), eq("mgr-1"), any());
+            // rejectRequest passes null as the second argument — BPMN engine
+            // resolves the assignee.
+            verify(workflowService).completeTask(eq("t-1"), isNull(), any());
         }
 
         @Test
@@ -595,7 +633,7 @@ class RequestServiceTest {
     class CompleteRequest {
 
         @Test
-        @DisplayName("完成成功并完成最终工作流任务")
+        @DisplayName("完成成功并完成最终工作流任务（currentUser 传 null）")
         void shouldCompleteSuccessfully() {
             Request request = requestWithStatus(RequestStatus.APPROVING);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
@@ -605,7 +643,9 @@ class RequestServiceTest {
             requestService.completeRequest(REQ_ID);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED.getValue());
-            verify(workflowService).completeTask("t-1", "mgr-1", Map.of("approved", true));
+            // completeRequest passes null as the second argument (assignee) —
+            // the BPMN engine resolves the assignee from its own state.
+            verify(workflowService).completeTask(eq("t-1"), isNull(), any());
         }
 
         @Test
@@ -646,10 +686,18 @@ class RequestServiceTest {
             return t;
         }
 
+        private AnalysisTask taskWithAssignee(String requestId, String assigneeId) {
+            AnalysisTask t = task(requestId);
+            t.setAssigneeId(assigneeId);
+            return t;
+        }
+
         @Test
-        @DisplayName("置为 IN_PROGRESS 应记录开始时间")
+        @DisplayName("置为 IN_PROGRESS 应记录开始时间（assignee 可调用）")
         void shouldSetStartedAt() {
-            AnalysisTask task = task(REQ_ID);
+            loginAs(USER_ID, "ENGINEER");
+            task(REQ_ID).setAssigneeId(USER_ID);
+            AnalysisTask task = taskWithAssignee(REQ_ID, USER_ID);
             when(analysisTaskMapper.selectById("task-1")).thenReturn(task);
 
             requestService.updateAnalysisTask("task-1", "IN_PROGRESS", null, USER_ID);
@@ -661,9 +709,10 @@ class RequestServiceTest {
         }
 
         @Test
-        @DisplayName("传入延期原因应被记录")
+        @DisplayName("传入延期原因应被记录（assignee 可调用）")
         void shouldSetDelayReason() {
-            AnalysisTask task = task(REQ_ID);
+            loginAs(USER_ID, "ENGINEER");
+            AnalysisTask task = taskWithAssignee(REQ_ID, USER_ID);
             when(analysisTaskMapper.selectById("task-1")).thenReturn(task);
 
             requestService.updateAnalysisTask("task-1", "IN_PROGRESS", "等待设备", USER_ID);
@@ -672,9 +721,11 @@ class RequestServiceTest {
         }
 
         @Test
-        @DisplayName("全部任务完成且委托在 REPORTING 时自动转 APPROVING")
+        @DisplayName("全部任务完成且委托在 REPORTING 且调用者是 MANAGER+ 时自动转 APPROVING")
         void shouldAutoTransitionToApprovingWhenAllTasksDone() {
-            AnalysisTask task = task(REQ_ID);
+            // Issue #20: caller must be ADMIN/MANAGER to trigger the auto-advance.
+            loginAs(USER_ID, "MANAGER");
+            AnalysisTask task = taskWithAssignee(REQ_ID, USER_ID);
             when(analysisTaskMapper.selectById("task-1")).thenReturn(task);
             when(analysisTaskMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
             Request request = requestWithStatus(RequestStatus.REPORTING);
@@ -688,9 +739,10 @@ class RequestServiceTest {
         }
 
         @Test
-        @DisplayName("仍有未完成任务时不触发自动转移")
+        @DisplayName("仍有未完成任务时不触发自动转移（即使调用者是 MANAGER）")
         void shouldNotTransitionWhenTasksPending() {
-            AnalysisTask task = task(REQ_ID);
+            loginAs(USER_ID, "MANAGER");
+            AnalysisTask task = taskWithAssignee(REQ_ID, USER_ID);
             when(analysisTaskMapper.selectById("task-1")).thenReturn(task);
             when(analysisTaskMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(2L);
 
@@ -701,9 +753,10 @@ class RequestServiceTest {
         }
 
         @Test
-        @DisplayName("任务全部完成但委托不在 REPORTING 时不转移")
+        @DisplayName("任务全部完成但委托不在 REPORTING 时不转移（即使调用者是 MANAGER）")
         void shouldNotTransitionWhenRequestNotReporting() {
-            AnalysisTask task = task(REQ_ID);
+            loginAs(USER_ID, "MANAGER");
+            AnalysisTask task = taskWithAssignee(REQ_ID, USER_ID);
             when(analysisTaskMapper.selectById("task-1")).thenReturn(task);
             when(analysisTaskMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
             Request request = requestWithStatus(RequestStatus.SAMPLING);
