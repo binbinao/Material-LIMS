@@ -178,13 +178,28 @@ public class RequestService {
         if (request == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
         }
+        // Issue (review H2): previously had no state guard, so a MANAGER
+        // could POST /reject on a COMPLETED request and re-flip it to
+        // REJECTED. Terminal states (COMPLETED, REJECTED) are no longer
+        // re-stateable.
+        String current = request.getStatus();
+        if (RequestStatus.COMPLETED.getValue().equals(current)
+                || RequestStatus.REJECTED.getValue().equals(current)) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID,
+                    "Request is in a terminal state (" + current + ") and cannot be rejected again");
+        }
+        requireRequestRole("MANAGER", "ADMIN");
+
         request.setStatus(RequestStatus.REJECTED.getValue());
         requestMapper.updateById(request);
 
-        // Complete workflow task with decision=reject
+        // Complete workflow task with decision=reject. We pass the current
+        // user so the Flowable act_hi_actinst row records who actually
+        // rejected (review M1).
         Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
         if (currentTask != null) {
-            workflowService.completeTask((String) currentTask.get("taskId"), null, Map.of("decision", "reject", "rejectReason", reason != null ? reason : ""));
+            workflowService.completeTask((String) currentTask.get("taskId"), SecurityUtils.getCurrentUserId(),
+                    Map.of("decision", "reject", "rejectReason", reason != null ? reason : ""));
         }
 
         log.info("Rejected request: requestNo={}, reason={}", request.getRequestNo(), reason);
@@ -242,7 +257,14 @@ public class RequestService {
     }
 
     /**
-     * Complete request - transition from APPROVING to COMPLETED
+     * Complete request - transition from APPROVING to COMPLETED.
+     *
+     * Issue (review H1): previously this method had no state guard, so a
+     * MANAGER could call POST /complete on a DRAFT/SUBMITTED/REJECTED
+     * request and silently flip it to COMPLETED, bypassing assign →
+     * receive-sample → start-reporting → approve entirely. The state
+     * check and the service-layer role guard mirror approveReport so
+     * the controller's @PreAuthorize cannot be the only line of defense.
      */
     @Transactional(rollbackFor = Exception.class)
     public void completeRequest(String requestId) {
@@ -250,6 +272,11 @@ public class RequestService {
         if (request == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
         }
+        if (!RequestStatus.APPROVING.getValue().equals(request.getStatus())) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID,
+                    "Request must be APPROVING before it can be completed (current=" + request.getStatus() + ")");
+        }
+        requireRequestRole("MANAGER", "ADMIN");
 
         request.setStatus(RequestStatus.COMPLETED.getValue());
         requestMapper.updateById(request);
@@ -257,7 +284,7 @@ public class RequestService {
         // Complete the final task in workflow with decision=approve
         Map<String, Object> currentTask = workflowService.getCurrentTask(requestId);
         if (currentTask != null) {
-            workflowService.completeTask((String) currentTask.get("taskId"), null, Map.of("decision", "approve"));
+            workflowService.completeTask((String) currentTask.get("taskId"), SecurityUtils.getCurrentUserId(), Map.of("decision", "approve"));
         }
 
         log.info("Request completed: requestNo={}", request.getRequestNo());
@@ -397,5 +424,23 @@ public class RequestService {
         }
 
         return prefix + String.format("%05d", nextNum);
+    }
+
+    /**
+     * Defense-in-depth role guard for state-transitioning actions on
+     * Request (complete / reject). Reads roles from the SecurityContext
+     * and refuses if none of {@code allowed} matches. Mirrors the
+     * {@code requireRoleAny} helper in ReportService so that a future
+     * controller that forgets its @PreAuthorize still cannot bypass the
+     * rule (review M6 noted the inconsistency with submitRequest, which
+     * still has no service-level role check — by design, since submit
+     * is keyed on ownership rather than role).
+     */
+    private void requireRequestRole(String... allowed) {
+        for (String r : allowed) {
+            if (SecurityUtils.hasRole(r)) return;
+        }
+        throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                "Operation requires one of roles: " + String.join(",", allowed));
     }
 }
