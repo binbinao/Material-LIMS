@@ -255,7 +255,20 @@ export async function login(loginId: string, password: string) {
 }
 
 export async function logout() {
-  return request(`${API_PREFIX}/auth/logout`, { method: 'POST' });
+  // POST /api/v1/auth/logout — server sets the LIMS_TOKEN cookie to
+  // MaxAge=0 so the browser drops it. We call `fetch` directly with
+  // `credentials: 'include'` so the cookie actually travels with the
+  // request; going through Umi's `request` is also fine but this
+  // makes the intent explicit. Any error is swallowed by the caller
+  // (utils/auth.ts) so a flaky network still gets the user to /login.
+  if (typeof window !== 'undefined') {
+    return fetch(`${API_PREFIX}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    }).then((r) => r.json());
+  }
+  return Promise.resolve({ code: 200 });
 }
 
 export async function changePassword(oldPassword: string, newPassword: string) {
