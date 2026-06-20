@@ -4,7 +4,6 @@ import { Tag, Button, App } from 'antd';
 import { useRef } from 'react';
 import { history, useIntl } from '@umijs/max';
 import { getReports } from '@/services/requestService';
-  const { message } = App.useApp();
 
 
 const reportStatusMap: Record<string, { color: string; text: string }> = {
@@ -17,6 +16,7 @@ const reportStatusMap: Record<string, { color: string; text: string }> = {
 const ReportList: React.FC = () => {
   const actionRef = useRef<any>();
   const intl = useIntl();
+  const { message } = App.useApp();
 
   const columns: ProColumns<API.Report>[] = [
     {

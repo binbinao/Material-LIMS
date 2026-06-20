@@ -63,8 +63,6 @@ jest.mock('@umijs/max', () => {
       listen: jest.fn(),
       location: { pathname: '/', search: '', hash: '' },
     },
-    // Umi re-exports the request helper as a named export — tests
-    // import it directly as `import { request } from '@umijs/max'`.
     request: jest.fn(() =>
       Promise.resolve({ code: 200, data: { records: [], total: 0 }, message: 'success' }),
     ),
@@ -92,10 +90,10 @@ jest.mock('umi-request', () => ({
 }));
 
 // Auto-mock every exported function from @/services/requestService so
-// tests can do `(getBrands as jest.Mock).mockResolvedValue(...)`.
-// Default envelope matches the backend R<T> shape used by pages — paginated
-// list endpoints expect `data: { records, total }` so ProTable renders an
-// empty state instead of crashing on undefined.total.
+// tests can do `(getBrands as jest.Mock).mockResolvedValue(...)`. Default
+// envelope matches the backend R<T> shape used by pages — paginated list
+// endpoints expect `data: { records, total }` so ProTable renders an empty
+// state instead of crashing on undefined.total.
 jest.mock('@/services/requestService', () => {
   const emptyPage = () =>
     jest.fn(() =>
@@ -109,7 +107,6 @@ jest.mock('@/services/requestService', () => {
     jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' }));
   return {
     __esModule: true,
-    // paginated list endpoints (data.records + data.total expected)
     getRequests: emptyPage(),
     getAdminLogs: emptyPage(),
     getAdminUsers: emptyPage(),
@@ -132,7 +129,6 @@ jest.mock('@/services/requestService', () => {
     ),
     getReports: emptyPage(),
     getMyPendingTasks: emptyPage(),
-    // single-object endpoints (data is the entity directly)
     getRequest: single(),
     createRequest: single(),
     submitRequest: single(),
@@ -163,4 +159,3 @@ jest.mock('@/services/requestService', () => {
     createReport: single(),
   };
 });
-

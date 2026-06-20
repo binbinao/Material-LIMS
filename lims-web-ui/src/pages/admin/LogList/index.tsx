@@ -1,9 +1,8 @@
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Tag, Modal, Descriptions, Typography } from 'antd';
+import { Tag, Modal, Descriptions, Typography, App } from 'antd';
 import { useRef, useState } from 'react';
 import { getAdminLogs } from '@/services/requestService';
-  const { message } = App.useApp();
 
 
 const MODULE_COLOR: Record<string, string> = {
@@ -16,6 +15,7 @@ const LogList: React.FC = () => {
   const actionRef = useRef<any>();
   const [detailOpen, setDetailOpen] = useState(false);
   const [activeLog, setActiveLog] = useState<any>(null);
+  const { message } = App.useApp();
 
   const columns: ProColumns[] = [
     { title: 'Timestamp', dataIndex: 'createdAt', width: 170, valueType: 'dateTime', sorter: true, search: false },
