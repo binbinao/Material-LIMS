@@ -487,6 +487,9 @@ class RequestServiceTest {
         @Test
         @DisplayName("驳回成功并完成工作流任务（currentUser 传 null）")
         void shouldRejectAndCompleteWorkflowTask() {
+            // Review H2: rejectRequest now requires MANAGER/ADMIN role +
+            // refuses terminal states. SUBMITTED + MANAGER is the happy path.
+            loginAs("user-mgr", "MANAGER");
             Request request = requestWithStatus(RequestStatus.SUBMITTED);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
             when(workflowService.getCurrentTask(REQ_ID))
@@ -496,14 +499,16 @@ class RequestServiceTest {
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.REJECTED.getValue());
             verify(requestMapper).updateById(request);
-            // rejectRequest passes null as the second argument — BPMN engine
-            // resolves the assignee.
-            verify(workflowService).completeTask(eq("t-1"), isNull(), any());
+            // Review M1: rejectRequest now passes the current user's id
+            // (not null) so the Flowable act_hi_actinst row records the
+            // rejecting user.
+            verify(workflowService).completeTask(eq("t-1"), eq("user-mgr"), any());
         }
 
         @Test
         @DisplayName("无活动工作流任务时只更新状态")
         void shouldRejectWhenNoWorkflowTask() {
+            loginAs("user-mgr", "MANAGER");
             Request request = requestWithStatus(RequestStatus.SUBMITTED);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
             when(workflowService.getCurrentTask(REQ_ID)).thenReturn(null);
@@ -635,6 +640,8 @@ class RequestServiceTest {
         @Test
         @DisplayName("完成成功并完成最终工作流任务（currentUser 传 null）")
         void shouldCompleteSuccessfully() {
+            // Review H1: completeRequest now requires APPROVING + MANAGER role.
+            loginAs("user-mgr", "MANAGER");
             Request request = requestWithStatus(RequestStatus.APPROVING);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
             when(workflowService.getCurrentTask(REQ_ID))
@@ -643,14 +650,16 @@ class RequestServiceTest {
             requestService.completeRequest(REQ_ID);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED.getValue());
-            // completeRequest passes null as the second argument (assignee) —
-            // the BPMN engine resolves the assignee from its own state.
-            verify(workflowService).completeTask(eq("t-1"), isNull(), any());
+            // Review M1: completeRequest now passes the current user's id
+            // (not null) so the Flowable act_hi_actinst row records who
+            // completed the request.
+            verify(workflowService).completeTask(eq("t-1"), eq("user-mgr"), any());
         }
 
         @Test
         @DisplayName("无工作流任务时只更新状态")
         void shouldCompleteWhenNoWorkflowTask() {
+            loginAs("user-mgr", "MANAGER");
             Request request = requestWithStatus(RequestStatus.APPROVING);
             when(requestMapper.selectById(REQ_ID)).thenReturn(request);
             when(workflowService.getCurrentTask(REQ_ID)).thenReturn(null);
