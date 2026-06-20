@@ -37,8 +37,18 @@ export const request = {
   },
   requestInterceptors: [
     (config: any) => {
-      // Add skipErrorHandler to all requests by default
-      return { ...config, skipErrorHandler: true };
+      // Dev-only: DevAuthFilter reads the X-Dev-User header to synthesize
+      // a principal without a real JWT. The username is stored in
+      // localStorage by the Login page's "Dev Quick Login" form so it
+      // survives page reloads. No-op in production (localStorage empty).
+      const devUser = typeof window !== 'undefined'
+        ? window.localStorage?.getItem('dev_user')
+        : null;
+      const headers = { ...(config?.headers || {}) };
+      if (devUser && !headers['X-Dev-User']) {
+        headers['X-Dev-User'] = devUser;
+      }
+      return { ...config, headers, skipErrorHandler: true };
     },
   ],
   responseInterceptors: [],
@@ -48,7 +58,12 @@ export async function getInitialState(): Promise<{
   currentUser?: API.CurrentUser;
 }> {
   try {
-    const res = await fetch('/api/v1/auth/me');
+    const devUser = typeof window !== 'undefined'
+      ? window.localStorage?.getItem('dev_user')
+      : null;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (devUser) headers['X-Dev-User'] = devUser;
+    const res = await fetch('/api/v1/auth/me', { headers, credentials: 'include' });
     // Issue #13: a 401 means the JWT is missing/expired. Treat that as
     // "not logged in" rather than as a successful response with a
     // possibly-malformed payload. Returning {} here leaves currentUser
@@ -62,3 +77,9 @@ export async function getInitialState(): Promise<{
     return {};
   }
 }
+
+/**
+ * Logout has been moved to src/utils/auth.ts. Umi treats every top-level
+ * export of app.tsx as a plugin key — exporting a function named
+ * `logout` triggers "register failed, invalid key logout" at boot.
+ */

@@ -30,6 +30,11 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: UTC
     default-property-inclusion: non_null
+  # Flyway (issue #31): explicit so a reader doesn't have to guess the
+  # autoconfig default; also keeps flowable from racing Flyway on app tables.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
 
 # MyBatis-Plus
 mybatis-plus:
@@ -47,13 +52,6 @@ mybatis-plus:
 flowable:
   database-schema-update: true
   async-executor-activate: true
-
-# Flyway (issue #31): explicit so a reader doesn't have to guess the
-# autoconfig default; also keeps flowable from racing Flyway on app tables.
-spring:
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
 
 # SpringDoc
 springdoc:

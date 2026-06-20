@@ -90,6 +90,14 @@ public class ReportService {
         report.setAuthorId(authorId);
         report.setVersionNumber("V1.0");
         report.setStatus(ReportStatus.DRAFT.getValue());
+        // Stamp a sequential "rpt-NNN" id before insert. The Report
+        // entity overrides BaseEntity's ASSIGN_UUID with IdType.INPUT
+        // so MyBatis-Plus does not overwrite this value, and the
+        // V10 CHECK constraint enforces the rpt-* prefix at the DB
+        // layer (catches future regressions). Race window between
+        // SELECT-MAX and INSERT is acceptable for a dev env; in
+        // production we'd switch to a Postgres SEQUENCE.
+        report.setId("rpt-" + String.format("%03d", reportMapper.selectMaxNumericReportId() + 1));
         reportMapper.insert(report);
 
         try {

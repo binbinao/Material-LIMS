@@ -101,3 +101,10 @@ logging:
     com.lims: DEBUG
     org.flowable: WARN
     org.springframework.security: WARN
+
+# JWT (dev-only placeholder secret; issue #2 removed the default)
+# DO NOT use this value in production — set SECURITY_JWT_SECRET via env.
+security:
+  jwt:
+    secret: dev-only-jwt-secret-please-rotate-me-in-production-32bytes-min
+    ttl-hours: 8

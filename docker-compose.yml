@@ -11,8 +11,10 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # init.sql is executed only on first creation of the data volume
-      - ./lims-web/src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Schema is owned by Flyway (db/migration/V*.sql). The init.sql seed is
+      # disabled here so the docker-entrypoint does not pre-create rows —
+      # Flyway needs an empty schema to apply V1__init.sql + V2__seed_dev.sql
+      # without duplicate-key errors.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lims"]
       interval: 10s

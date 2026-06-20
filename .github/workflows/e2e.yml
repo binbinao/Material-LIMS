@@ -1,0 +1,142 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lims-web-ui/**'
+      - 'tests/e2e/**'
+      - 'playwright.config.ts'
+      - '.github/workflows/e2e.yml'
+  pull_request:
+    paths:
+      - 'lims-web-ui/**'
+      - 'tests/e2e/**'
+      - 'playwright.config.ts'
+      - '.github/workflows/e2e.yml'
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium]
+
+    env:
+      BASE_URL: http://localhost:8000
+      API_URL: http://localhost:8080/api/v1
+      E2E_USER: admin
+      E2E_PASSWORD: admin123
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: lims
+          POSTGRES_USER: lims
+          POSTGRES_PASSWORD: lims
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lims"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+          - 9001:9001
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: lims-web-ui/package-lock.json
+
+      - name: Build backend
+        run: ./mvnw -B -q -pl lims-web -am package -DskipTests
+
+      - name: Start backend
+        env:
+          SPRING_PROFILES_ACTIVE: dev
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/lims
+          SPRING_DATASOURCE_USERNAME: lims
+          SPRING_DATASOURCE_PASSWORD: lims
+          SPRING_REDIS_HOST: localhost
+          SPRING_REDIS_PORT: 6379
+          FILE_STORAGE_ENDPOINT: http://localhost:9000
+          FILE_STORAGE_ACCESS_KEY: minioadmin
+          FILE_STORAGE_SECRET_KEY: minioadmin
+        run: |
+          nohup java -jar lims-web/target/lims-web-*.jar \
+            --spring.profiles.active=dev \
+            > backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null; then
+              echo "backend up"; break
+            fi
+            sleep 2
+          done
+
+      - name: Install frontend deps
+        working-directory: lims-web-ui
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: lims-web-ui
+        run: npm run build
+
+      - name: Install Playwright browsers
+        working-directory: lims-web-ui
+        run: npx playwright install --with-deps ${{ matrix.project }}
+
+      - name: Run Playwright tests
+        run: cd lims-web-ui && npx playwright test --project=${{ matrix.project }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: |
+            playwright-report/
+            test-results/
+            playwright-results.xml
+          retention-days: 14
