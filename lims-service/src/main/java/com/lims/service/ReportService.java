@@ -191,6 +191,17 @@ public class ReportService {
         // surfaced this gap — push the check down to the service so
         // no future controller wiring can quietly bypass it.
         requireRoleAny(managerId, "MANAGER", "ADMIN");
+        // Issue (review H5): mirror the four-eyes check from approveReport.
+        // Without this, a MANAGER who also authors a report could self-
+        // reject, send the report back to REVISING, edit, and re-submit
+        // without a second pair of eyes ever reviewing the content. The
+        // impact is lower than approve (a self-reject demotes the report,
+        // not advances it), but the asymmetry is a foot-gun and was the
+        // only difference between approve and reject in this file.
+        if (report.getAuthorId() != null && report.getAuthorId().equals(managerId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                    "Rejector must not be the report author");
+        }
 
         report.setStatus(ReportStatus.REVISING.getValue());
         report.setRejectedBy(managerId);
