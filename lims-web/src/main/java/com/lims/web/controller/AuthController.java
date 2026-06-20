@@ -33,20 +33,63 @@ public class AuthController {
 
     @GetMapping("/azure-ad-login")
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Get Azure AD login redirect URL")
+    @Operation(summary = "(disabled) Azure AD SSO login — returns 410")
     public R<Map<String, String>> azureAdLogin(HttpSession session) {
-        return R.ok(Map.of("authorizationUrl", authService.getAuthorizationUrl(session)));
+        // SSO has been turned off per product decision. The endpoint
+        // remains in the code so a future product owner can re-enable
+        // by setting `azure.ad.enabled=true` and wiring the client
+        // secret / tenant id. For now we reject with 410 Gone so any
+        // stale bookmark / cached URL is loud rather than silent.
+        throw new com.lims.common.exception.BusinessException(
+                com.lims.common.exception.ErrorCode.M365_INTEGRATION_ERROR,
+                "SSO login is disabled. Use POST /api/v1/auth/login with loginId and password.");
+    }
+
+    @GetMapping("/azure-ad/url")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "(disabled) Azure AD SSO login — historical frontend URL, returns 410")
+    public R<Map<String, String>> azureAdUrlAlias() {
+        // The frontend used to call /auth/azure-ad/url; the old backend
+        // route was /auth/azure-ad-login. Both are now disabled.
+        throw new com.lims.common.exception.BusinessException(
+                com.lims.common.exception.ErrorCode.M365_INTEGRATION_ERROR,
+                "SSO login is disabled. Use POST /api/v1/auth/login with loginId and password.");
     }
 
     @PostMapping("/callback")
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Azure AD OAuth callback endpoint (response_mode=form_post)")
+    @Operation(summary = "(disabled) Azure AD OAuth callback — returns 410")
     public R<Map<String, Object>> callback(@RequestParam String code,
                                            @RequestParam String state,
                                            HttpSession session,
                                            HttpServletResponse response) {
-        Map<String, Object> result = authService.handleCallback(code, state, session);
-        // Set httpOnly cookie so subsequent requests carry the token
+        throw new com.lims.common.exception.BusinessException(
+                com.lims.common.exception.ErrorCode.M365_INTEGRATION_ERROR,
+                "SSO callback is disabled. Use POST /api/v1/auth/login with loginId and password.");
+    }
+
+    @PostMapping("/azure-ad/callback")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "(disabled) Azure AD OAuth callback — historical frontend URL, returns 410")
+    public R<Map<String, Object>> azureAdCallbackAlias() {
+        throw new com.lims.common.exception.BusinessException(
+                com.lims.common.exception.ErrorCode.M365_INTEGRATION_ERROR,
+                "SSO callback is disabled. Use POST /api/v1/auth/login with loginId and password.");
+    }
+
+    /**
+     * Manual password login. The default password for every seeded
+     * account is "password" (see V15). Issues the same LIMS JWT as
+     * the (now-disabled) SSO callback and sets the auth cookie.
+     */
+    @PostMapping("/login")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Login with loginId + password; returns LIMS JWT and sets auth cookie")
+    public R<Map<String, Object>> login(@RequestBody Map<String, String> body,
+                                        HttpServletResponse response) {
+        String loginId = body.get("loginId");
+        String password = body.get("password");
+        Map<String, Object> result = authService.login(loginId, password);
         Object tokenObj = result.get("token");
         if (tokenObj instanceof String token) {
             Cookie cookie = new Cookie(JwtAuthenticationFilter.COOKIE_NAME, token);
@@ -57,6 +100,21 @@ public class AuthController {
             response.addCookie(cookie);
         }
         return R.ok(result);
+    }
+
+    /**
+     * Self-service password change. Caller is identified from the
+     * SecurityContext (the auth cookie). Requires the current password.
+     */
+    @PutMapping("/password")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Change the current user's password")
+    public R<Void> changePassword(@RequestBody Map<String, String> body) {
+        authService.changePassword(
+                SecurityUtils.getCurrentUserId(),
+                body.get("oldPassword"),
+                body.get("newPassword"));
+        return R.ok();
     }
 
     @PostMapping("/logout")

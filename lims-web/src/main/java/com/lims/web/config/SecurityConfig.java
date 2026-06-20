@@ -25,14 +25,26 @@ public class SecurityConfig {
     /**
      * Dev profile：所有接口放行，但仍注入一个虚拟 ADMIN 用户，
      * 这样依赖 SecurityUtils.getCurrentUserId() 的代码（数据权限、审计日志、报告创建等）能拿到稳定的 userId。
+     *
+     * Filter order:
+     *   1. JwtAuthenticationFilter — reads the LIMS_TOKEN cookie set by
+     *      POST /auth/login. If a valid JWT is present, the SecurityContext
+     *      is populated and DevAuthFilter below is a no-op.
+     *   2. DevAuthFilter — synthesizes a principal from the X-Dev-User
+     *      header for tests / curl probes / quick-login that don't have
+     *      a real cookie. Skips itself if the context is already set
+     *      by the JWT filter, so a manual login always wins.
      */
     @Bean
     @Profile("dev")
-    public SecurityFilterChain devFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain devFilterChain(HttpSecurity http,
+                                             JwtTokenProvider jwtTokenProvider) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
+                    UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(new DevAuthFilter(), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

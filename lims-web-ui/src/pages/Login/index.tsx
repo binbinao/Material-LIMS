@@ -1,32 +1,56 @@
 import { Button, Card, Form, Input, Space, Typography, Divider, App } from 'antd';
-import { WindowsOutlined, LoginOutlined } from '@ant-design/icons';
-import { useRequest } from 'ahooks';
+import { UserOutlined, LockOutlined, LoginOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { history, useModel } from '@umijs/max';
-import { getAuthUrl } from '@/services/requestService';
+import { login } from '@/services/requestService';
 
 const { Title, Text, Paragraph } = Typography;
 
 const Login: React.FC = () => {
   const { message } = App.useApp();
   const { setInitialState } = useModel('@@initialState');
+  const [loginForm] = Form.useForm();
   const [devForm] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
   const isDev = process.env.NODE_ENV !== 'production';
 
-  const { loading, run: handleSSO } = useRequest(async () => {
-    const result = await getAuthUrl();
-    if (result?.data) {
-      window.location.href = result.data;
-    } else {
-      message.error('Failed to get SSO URL');
+  /**
+   * Manual password login. Default password for every seeded account
+   * is "password" (V15). The server sets the LIMS_TOKEN auth cookie
+   * and returns {token, user, expiresInHours}; we mirror the user
+   * into initialState so the rest of the UI can read it without a
+   * second /auth/me round trip.
+   */
+  const handleLogin = async (values: { loginId: string; password: string }) => {
+    setSubmitting(true);
+    try {
+      const res = await login(values.loginId, values.password);
+      if (res?.code !== 200 || !res?.data?.user) {
+        message.error('Login failed: ' + (res?.message || 'no user'));
+        return;
+      }
+      // Clear any stale dev_user from a prior quick-login session so
+      // the requestInterceptor (app.tsx) doesn't keep sending it.
+      window.localStorage.removeItem('dev_user');
+      await setInitialState((s: any) => ({ ...s, currentUser: res.data.user }));
+      message.success('Welcome, ' + res.data.user.displayName);
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect') || '/';
+      history.push(redirect);
+    } catch (e: any) {
+      message.error(e?.message || 'Login error');
+    } finally {
+      setSubmitting(false);
     }
-  }, { manual: true });
+  };
 
-  // Dev-only quick login: the DevAuthFilter on the backend synthesizes an
-  // ADMIN-equivalent principal from the X-Dev-User header. The username is
-  // stored in localStorage so app.tsx's requestInterceptor can re-attach
-  // the header on every subsequent API call (including page reloads).
-  // Hidden in prod via the isDev guard below.
+  /**
+   * Dev quick login: the DevAuthFilter on the backend synthesizes a
+   * principal from the X-Dev-User header without a real JWT, so we
+   * just hit /auth/me with the chosen username. Kept for tests, demos,
+   * and smoke probes — production builds hide it via the isDev guard
+   * below.
+   */
   const handleDevLogin = async (values: { username: string }) => {
     try {
       const me = await fetch('/api/v1/auth/me', {
@@ -37,7 +61,6 @@ const Login: React.FC = () => {
         message.error('Dev login failed: ' + (me?.message || 'no user'));
         return;
       }
-      // Persist for the requestInterceptor (app.tsx) to pick up.
       window.localStorage.setItem('dev_user', values.username);
       await setInitialState((s: any) => ({ ...s, currentUser: me.data }));
       message.success('Logged in as ' + me.data.displayName);
@@ -61,24 +84,45 @@ const Login: React.FC = () => {
         </div>
 
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Button
-            type="primary"
-            size="large"
-            block
-            icon={<WindowsOutlined />}
-            loading={loading}
-            onClick={handleSSO}
-            style={{ height: 48, fontSize: 16 }}
+          <Form
+            form={loginForm}
+            layout="vertical"
+            onFinish={handleLogin}
+            initialValues={{ loginId: 'admin', password: 'password' }}
+            style={{ width: '100%' }}
           >
-            Sign in with Microsoft 365
-          </Button>
-
-          <Divider style={{ margin: '8px 0' }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Secure SSO</Text>
-          </Divider>
+            <Form.Item
+              name="loginId"
+              label="Username"
+              rules={[{ required: true, message: 'Enter a username' }]}
+            >
+              <Input prefix={<UserOutlined />} placeholder="admin" autoComplete="username" />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="Password"
+              rules={[{ required: true, message: 'Enter a password' }]}
+            >
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="password"
+                autoComplete="current-password"
+              />
+            </Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              icon={<LoginOutlined />}
+              loading={submitting}
+            >
+              Sign in
+            </Button>
+          </Form>
 
           <Paragraph type="secondary" style={{ textAlign: 'center', fontSize: 12, marginBottom: 0 }}>
-            Access is managed through Azure AD. Contact your administrator if you cannot sign in.
+            Default password is <code>password</code> for every seeded account. Change it
+            from your account settings after first sign-in.
           </Paragraph>
 
           {isDev && (
@@ -98,13 +142,12 @@ const Login: React.FC = () => {
                   label={<Text type="secondary" style={{ fontSize: 12 }}>Username</Text>}
                   rules={[{ required: true, message: 'Enter a username' }]}
                 >
-                  <Input placeholder="admin" autoComplete="username" />
+                  <Input prefix={<ThunderboltOutlined />} placeholder="admin" autoComplete="username" />
                 </Form.Item>
                 <Button
                   type="default"
                   htmlType="submit"
                   block
-                  icon={<LoginOutlined />}
                 >
                   Dev Login (no password)
                 </Button>

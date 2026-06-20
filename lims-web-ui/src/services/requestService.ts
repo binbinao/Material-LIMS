@@ -250,6 +250,23 @@ export async function getCostStats(params?: Record<string, any>) {
 }
 
 /** Auth API */
+export async function login(loginId: string, password: string) {
+  return request(`${API_PREFIX}/auth/login`, { method: 'POST', data: { loginId, password } });
+}
+
+export async function logout() {
+  return request(`${API_PREFIX}/auth/logout`, { method: 'POST' });
+}
+
+export async function changePassword(oldPassword: string, newPassword: string) {
+  return request(`${API_PREFIX}/auth/password`, {
+    method: 'PUT',
+    data: { oldPassword, newPassword },
+  });
+}
+
+/** Legacy SSO endpoints — both return 410 from the server. Kept here
+ *  in case the Umi bundle or a stale browser tab still references them. */
 export async function getAuthUrl() {
   return request(`${API_PREFIX}/auth/azure-ad/url`);
 }

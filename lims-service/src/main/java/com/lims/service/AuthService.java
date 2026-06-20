@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -367,5 +368,85 @@ public class AuthService {
     public SysUser getCurrentUser(String userId) {
         if (userId == null) return null;
         return sysUserMapper.selectById(userId);
+    }
+
+    // ─── Password-based login (replaces SSO) ─────────────────────────
+
+    /**
+     * Password authentication. Looks up the user by {@code login_id},
+     * verifies the BCrypt-hashed {@code password_hash}, and issues a
+     * LIMS JWT.
+     *
+     * Returns the same shape as the SSO {@link #handleCallback} so the
+     * frontend can drop in this method without changing the post-login
+     * flow.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> login(String loginId, String rawPassword) {
+        if (loginId == null || loginId.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_VALIDATION_FAILED, "loginId is required");
+        }
+        if (rawPassword == null || rawPassword.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_VALIDATION_FAILED, "password is required");
+        }
+
+        SysUser user = sysUserMapper.selectOne(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getLoginId, loginId));
+
+        // Constant-time-ish path: we still call matches() even when the
+        // user is null, so a 401 from "no such user" and "wrong password"
+        // take comparable time. (A no-such-user path that early-returns
+        // is a classic username-enumeration vector.)
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        String storedHash = user != null ? user.getPasswordHash() : "$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid";
+        boolean ok = encoder.matches(rawPassword, storedHash);
+        if (user == null || !ok) {
+            log.warn("Login failed for loginId={} (userExists={})", loginId, user != null);
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "Invalid loginId or password");
+        }
+        if (Boolean.FALSE.equals(user.getIsActive())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "User account is disabled");
+        }
+
+        user.setLastLoginAt(LocalDateTime.now());
+        sysUserMapper.updateById(user);
+
+        String token = jwtTokenProvider.generate(
+                user.getId(), user.getEmail(), user.getDisplayName(),
+                user.getRoles(), user.getDeptId());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("token", token);
+        result.put("user", user);
+        result.put("expiresInHours", jwtTokenProvider.getTtlHours());
+        log.info("Password login success: userId={}, loginId={}", user.getId(), loginId);
+        return result;
+    }
+
+    /**
+     * Change the current user's password. The user is identified from
+     * the security context (so a caller can only change their own
+     * password — admins must go through a different path if we add one).
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void changePassword(String userId, String oldPassword, String newPassword) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "Not authenticated");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BusinessException(ErrorCode.PARAM_VALIDATION_FAILED,
+                    "New password must be at least 6 characters");
+        }
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        if (oldPassword == null || !encoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "Current password is incorrect");
+        }
+        user.setPasswordHash(encoder.encode(newPassword));
+        sysUserMapper.updateById(user);
+        log.info("Password changed for userId={}", userId);
     }
 }
