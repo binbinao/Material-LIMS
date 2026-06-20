@@ -30,6 +30,16 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   });
 }
 
+// NOTE on App.useApp(): 16 pages call `const { message } = App.useApp();`
+// at module top-level (e.g. src/pages/request/RequestList/index.tsx:8).
+// That is a React anti-pattern — hooks must be called inside a render —
+// and under jsdom it throws "Cannot read properties of null
+// (reading 'useContext')" because there is no <App> provider. We do NOT
+// mock antd here because @ant-design/pro-components depends on the real
+// antd exports (Button.Group, Space, etc.) and breaks the moment antd is
+// stubbed. The right fix is in the page files: move the
+// `App.useApp()` call inside the component function.
+
 // Mock @umijs/max — the Umi framework runtime. The real package depends
 // on esbuild + a CLI runtime that crashes under jsdom. We replace its
 // exports with lightweight stubs that satisfy the structural tests.

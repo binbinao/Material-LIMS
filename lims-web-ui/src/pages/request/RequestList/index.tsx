@@ -5,8 +5,6 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useRef } from 'react';
 import { history, useIntl } from '@umijs/max';
 import { getRequests } from '@/services/requestService';
-  const { message } = App.useApp();
-
 
 const statusColorMap: Record<string, string> = {
   DRAFT: 'default',
@@ -29,6 +27,7 @@ const priorityColorMap: Record<string, string> = {
 const RequestList: React.FC = () => {
   const actionRef = useRef<any>();
   const intl = useIntl();
+  const { message } = App.useApp();
 
   const columns: ProColumns<any>[] = [
     {
