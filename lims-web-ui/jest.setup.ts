@@ -11,103 +11,156 @@
 
 import '@testing-library/jest-dom';
 
+// Polyfill window.matchMedia — Ant Design ProTable / Grid / Responsive
+// components call it on mount; jsdom doesn't implement it. Without this
+// the components throw "window.matchMedia is not a function" on render.
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 // Mock @umijs/max — the Umi framework runtime. The real package depends
 // on esbuild + a CLI runtime that crashes under jsdom. We replace its
-// exports with lightweight stubs that satisfy the structural tests
-// (which only call hooks like useParams, useIntl, useAccess, useModel
-// for code paths, not for actual rendering).
+// exports with lightweight stubs that satisfy the structural tests.
+// Hooks are `jest.fn()` (not plain functions) so tests can do
+// `(useParams as jest.Mock).mockReturnValue({ id: 'req-001' })`.
 jest.mock('@umijs/max', () => {
-  const noop = () => undefined;
+  const noop = jest.fn();
+  const useParams = jest.fn(() => ({}));
+  const useModel = jest.fn(() => ({ initialState: { currentUser: { id: 'user-001' } } }));
+  const useRequest = jest.fn((fn: () => unknown) => ({
+    data: undefined, loading: false, run: fn, refresh: noop,
+  }));
+  const useIntl = jest.fn(() => ({
+    formatMessage: ({ id, defaultMessage }: { id?: string; defaultMessage?: string }) =>
+      defaultMessage ?? id ?? '',
+    locale: 'en-US',
+  }));
+  const useAccess = jest.fn(() => ({
+    canAdmin: true,
+    canManager: true,
+    canEngineer: true,
+    canTechnician: true,
+    canRequester: true,
+  }));
   return {
     history: {
-      push: noop,
-      replace: noop,
-      goBack: noop,
-      go: noop,
-      listen: noop,
+      push: jest.fn(),
+      replace: jest.fn(),
+      goBack: jest.fn(),
+      go: jest.fn(),
+      listen: jest.fn(),
       location: { pathname: '/', search: '', hash: '' },
     },
-    useAccess: () => ({
-      canAdmin: true,
-      canManager: true,
-      canEngineer: true,
-      canTechnician: true,
-      canRequester: true,
-    }),
-    useIntl: () => ({
-      formatMessage: ({ defaultMessage }: { defaultMessage?: string }) =>
-        defaultMessage ?? '',
-      locale: 'en-US',
-    }),
-    useModel: () => ({ initialState: { currentUser: { id: 'dev-user-0001' } } }),
-    useLocation: () => ({ pathname: '/', search: '', hash: '' }),
-    useNavigate: () => noop,
-    useParams: () => ({}),
-    useRouteProps: () => ({}),
-    useRequest: (fn: () => unknown) => ({ data: undefined, loading: false, run: fn, refresh: noop }),
+    // Umi re-exports the request helper as a named export — tests
+    // import it directly as `import { request } from '@umijs/max'`.
+    request: jest.fn(() =>
+      Promise.resolve({ code: 200, data: { records: [], total: 0 }, message: 'success' }),
+    ),
+    useAccess,
+    useIntl,
+    useModel,
+    useLocation: jest.fn(() => ({ pathname: '/', search: '', hash: '' })),
+    useNavigate: jest.fn(),
+    useParams,
+    useRouteProps: jest.fn(() => ({})),
+    useRequest,
     __esModule: true,
   };
 });
 
-// Mock umi-request (used by requestService.ts). The real package POSTs
-// fetch() calls — we replace it with a no-op that resolves to a
-// harmless R<{}> envelope so structural tests don't make network calls.
+// Mock umi-request (used by requestService.ts and directly by tests
+// that cast `request` as jest.Mock). The default export + named `request`
+// are both jest.fn() so tests can override per-case.
 jest.mock('umi-request', () => ({
   __esModule: true,
-  default: () => Promise.resolve({ code: 200, data: {}, message: 'success' }),
-  request: () => Promise.resolve({ code: 200, data: {}, message: 'success' }),
-  extend: () => undefined,
+  default: jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' })),
+  request: jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' })),
+  extend: jest.fn(),
   RequestError: class RequestError extends Error {},
 }));
 
 // Auto-mock every exported function from @/services/requestService so
 // tests can do `(getBrands as jest.Mock).mockResolvedValue(...)`.
-// Each function returns a benign R<{}> envelope by default; tests
-// override per-case.
+// Default envelope matches the backend R<T> shape used by pages — paginated
+// list endpoints expect `data: { records, total }` so ProTable renders an
+// empty state instead of crashing on undefined.total.
 jest.mock('@/services/requestService', () => {
-  const make = () => jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' }));
+  const emptyPage = () =>
+    jest.fn(() =>
+      Promise.resolve({
+        code: 200,
+        data: { records: [], total: 0, current: 1, size: 20 },
+        message: 'success',
+      }),
+    );
+  const single = () =>
+    jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' }));
   return {
     __esModule: true,
-    getRequests: make(),
-    getRequest: make(),
-    createRequest: make(),
-    submitRequest: make(),
-    assignRequest: make(),
-    rejectRequest: make(),
-    receiveSample: make(),
-    startReporting: make(),
-    completeRequest: make(),
-    updateAnalysisTask: make(),
-    getRequestTasks: make(),
-    getRequestWorkflow: make(),
-    getAdminUsers: make(),
-    getAdminLogs: make(),
-    getMyDashboard: make(),
-    getMyPendingTasks: make(),
-    getAuthUrl: make(),
-    getBrands: make(),
-    getBrand: make(),
-    createBrand: make(),
-    updateBrand: make(),
-    deleteBrand: make(),
-    getRequestTypes: make(),
-    getDepartments: make(),
-    getAnalysisItems: make(),
-    getAnalysisItemGroups: make(),
-    getEquipments: make(),
-    getEquipmentRepairs: make(),
-    getKnowledgeDocs: make(),
-    getHolidays: make(),
-    getReport: make(),
-    getReports: make(),
-    getReportRevisions: make(),
-    submitReport: make(),
-    approveReport: make(),
-    rejectReport: make(),
-    reviseReport: make(),
-    getReportEditUrl: make(),
-    syncReportFromSharePoint: make(),
-    createReport: make(),
+    // paginated list endpoints (data.records + data.total expected)
+    getRequests: emptyPage(),
+    getAdminLogs: emptyPage(),
+    getAdminUsers: emptyPage(),
+    getRequestTypes: emptyPage(),
+    getDepartments: emptyPage(),
+    getAnalysisItems: emptyPage(),
+    getAnalysisItemGroups: emptyPage(),
+    getAnalysisItemCascade: emptyPage(),
+    getEquipments: emptyPage(),
+    getEquipmentRepairs: emptyPage(),
+    getEquipmentStats: single(),
+    getKnowledgeDocs: emptyPage(),
+    getHolidays: emptyPage(),
+    getI18nMessages: jest.fn(() =>
+      Promise.resolve({
+        code: 200,
+        data: { 'common.create': 'Create', 'common.cancel': 'Cancel' },
+        message: 'success',
+      }),
+    ),
+    getReports: emptyPage(),
+    getMyPendingTasks: emptyPage(),
+    // single-object endpoints (data is the entity directly)
+    getRequest: single(),
+    createRequest: single(),
+    submitRequest: single(),
+    assignRequest: single(),
+    rejectRequest: single(),
+    receiveSample: single(),
+    startReporting: single(),
+    completeRequest: single(),
+    updateAnalysisTask: single(),
+    getRequestTasks: emptyPage(),
+    getRequestWorkflow: single(),
+    getMyDashboard: single(),
+    getAuthUrl: single(),
+    getCostStats: single(),
+    getBrands: emptyPage(),
+    getBrand: single(),
+    createBrand: single(),
+    updateBrand: single(),
+    deleteBrand: single(),
+    getReport: single(),
+    getReportRevisions: emptyPage(),
+    submitReport: single(),
+    approveReport: single(),
+    rejectReport: single(),
+    reviseReport: single(),
+    getReportEditUrl: single(),
+    syncReportFromSharePoint: single(),
+    createReport: single(),
   };
 });
 
