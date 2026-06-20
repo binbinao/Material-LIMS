@@ -35,13 +35,6 @@ const ReportDetail: React.FC = () => {
   // or manager sees the Submit button and gets a confusing toast on click.
   const isAuthor = !!report && !!currentUserId && report.authorId === currentUserId;
 
-  // Issue #54 (P8): only the report's author can Submit/Edit/Sync their own
-  // report. The backend's validateReportOwnership() rejects non-authors
-  // with ACCESS_DENIED; without this UI gate, any ENGINEER/MANAGER sees the
-  // Submit button and gets a confusing toast on click.
-  const currentUserId = useCurrentUserId();
-  const isAuthor = !!report && !!currentUserId && report.authorId === currentUserId;
-
   const handleAction = async (action: string) => {
     try {
       switch (action) {
