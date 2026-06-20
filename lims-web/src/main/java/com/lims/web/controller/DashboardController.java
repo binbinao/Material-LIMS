@@ -61,7 +61,7 @@ public class DashboardController {
     }
 
     @GetMapping("/manager-overview")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public R<Map<String, Object>> managerOverview() {
         Map<String, Long> statusCounts = new HashMap<>();
         for (String status : List.of("SUBMITTED", "ASSIGNED", "SAMPLING", "REPORTING", "APPROVING")) {
@@ -79,7 +79,7 @@ public class DashboardController {
     }
 
     @GetMapping("/request-stats")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public R<Map<String, Object>> requestStats(
             @RequestParam(required = false) String brandId,
             @RequestParam(required = false) String typeId,
@@ -97,7 +97,7 @@ public class DashboardController {
 
     @Operation(summary = "Cost statistics with multiple grouping dimensions: brand|type|month|item")
     @GetMapping("/cost-stats")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public R<Map<String, Object>> costStats(
             @RequestParam(required = false) String brandId,
             @RequestParam(required = false) String typeId,
@@ -109,7 +109,7 @@ public class DashboardController {
 
     @Operation(summary = "Export cost statistics to xlsx")
     @GetMapping("/cost-export")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<byte[]> costExport(
             @RequestParam(required = false) String brandId,
             @RequestParam(required = false) String typeId,

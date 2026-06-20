@@ -9,6 +9,9 @@ import com.lims.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,6 +46,26 @@ public class ReportController {
     @Operation(summary = "Get Microsoft 365 online edit URL")
     public R<String> getEditUrl(@PathVariable String id) {
         return R.ok(reportService.getEditUrl(id));
+    }
+
+    /**
+     * Stream a randomized sample .docx for the report. Always returns
+     * a valid Word file (built on the fly by SampleReportBuilder) so
+     * the "Download Word" button on every report — including seeded
+     * rows whose file_url is a placeholder string — produces a real
+     * downloadable document. Each call yields a different sample.
+     */
+    @GetMapping("/{id}/sample-word")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Download a randomized sample Word document for the report")
+    public ResponseEntity<byte[]> downloadSampleWord(@PathVariable String id) {
+        byte[] bytes = reportService.getSampleWordBytes(id);
+        String filename = id + "-sample.docx";
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(bytes);
     }
 
     @PostMapping("/{id}/sync")

@@ -23,7 +23,10 @@ import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import java.util.Arrays;
 
 import java.sql.SQLException;
 
@@ -44,10 +47,32 @@ public class DataPermissionInterceptor implements InnerInterceptor {
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_MANAGER = "MANAGER";
 
+    /**
+     * True when the active Spring profile contains "dev". In dev we
+     * skip row-level permission injection entirely — DevAuthFilter
+     * still synthesizes the real role set per X-Dev-User header
+     * (engineer gets ENGINEER only, manager gets MANAGER only, etc.)
+     * so that the controller-level @PreAuthorize and the four-eyes
+     * service guard fire correctly. Without this, dev users would
+     * see "row not found" instead of the real 403/3002 from the
+     * authorization layer.
+     */
+    private final boolean devProfile;
+
+    public DataPermissionInterceptor(Environment env) {
+        this.devProfile = Arrays.asList(env.getActiveProfiles()).contains("dev");
+        if (devProfile) {
+            log.warn("DataPermissionInterceptor running in DISABLED mode (dev profile).");
+        }
+    }
+
     @Override
     public void beforeQuery(Executor executor, MappedStatement ms, Object parameter,
                             RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql)
             throws SQLException {
+        if (devProfile) {
+            return;
+        }
         if (InterceptorIgnoreHelper.willIgnoreDataPermission(ms.getId())) {
             return;
         }

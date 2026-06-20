@@ -42,6 +42,17 @@ const ReportList: React.FC = () => {
     { title: 'Submitted', dataIndex: 'submittedAt', width: 150, valueType: 'dateTime', search: false },
     { title: 'Approved', dataIndex: 'approvedAt', width: 150, valueType: 'dateTime', search: false },
     { title: 'Created', dataIndex: 'createdAt', width: 150, valueType: 'dateTime', search: false, sorter: true },
+    {
+      title: 'Download',
+      dataIndex: 'id',
+      width: 120,
+      search: false,
+      render: (_, record) => (
+        <a href={`/api/v1/reports/${record.id}/sample-word`} target="_blank" rel="noopener">
+          Word
+        </a>
+      ),
+    },
   ];
 
   return (

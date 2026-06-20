@@ -15,6 +15,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity   // applies in BOTH dev and prod profiles — was previously
+                       // scoped to a separate @Profile("!dev") inner class, which
+                       // silently disabled every @PreAuthorize on the controllers
+                       // in dev (engineer could approve / reject IN_REVIEW
+                       // reports). prePostEnabled defaults to true.
 public class SecurityConfig {
 
     /**
@@ -58,10 +63,4 @@ public class SecurityConfig {
 
         return http.build();
     }
-}
-
-@Configuration
-@EnableMethodSecurity
-@Profile("!dev")
-class ProdMethodSecurityConfig {
 }

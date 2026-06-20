@@ -10,6 +10,7 @@ import lombok.EqualsAndHashCode;
 public class RequestType extends BaseEntity {
 
     private String name;
+    private String code;
     private Integer taskDurationDays;
     private Boolean partInfoRequired;
     private String description;

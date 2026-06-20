@@ -15,6 +15,7 @@ public class AnalysisItem extends BaseEntity {
     private String siteId;
     private String typeId;
     private String name;
+    private String code;
     private String equipmentId;
     private String testStandards;
     private String specificationId;

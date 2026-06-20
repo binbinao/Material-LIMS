@@ -132,6 +132,11 @@ export async function getDepartments() {
   return request(`${API_PREFIX}/departments`);
 }
 
+/** Fetch the department tree (nested). Backed by /api/v1/departments/tree. */
+export async function getDepartmentTree() {
+  return request(`${API_PREFIX}/departments/tree`);
+}
+
 export async function createDepartment(data: any) {
   return request(`${API_PREFIX}/departments`, { method: 'POST', data });
 }

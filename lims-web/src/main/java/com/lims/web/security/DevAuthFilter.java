@@ -65,18 +65,16 @@ public class DevAuthFilter extends OncePerRequestFilter {
                     : new DevUser(DEV_USER_ID, DEV_USER_EMAIL, "Dev User",
                             "ADMIN,MANAGER,ENGINEER,REQUESTER,TECHNICIAN");
 
-            // Each dev user gets their *own* role PLUS ADMIN. The
-            // ADMIN role short-circuits DataPermissionInterceptor so
-            // engineer/manager can see every request/report in the seed
-            // (otherwise row-level visibility hides req-001 from
-            // user-engineer-001 and "Generate Report" 404s). The
-            // distinct user ids (user-engineer-001 vs user-manager-001)
-            // are what makes four-eyes still bite — same id ⇒ same person
-            // ⇒ approval blocked, which is the exact security model we
-            // want to test.
-            String roles = dev.roles.contains("ADMIN")
-                    ? dev.roles
-                    : dev.roles + ",ADMIN";
+            // Each dev user gets exactly the role they were mapped to
+            // — no auto-append of ADMIN. The previous behaviour ("give
+            // everyone ADMIN to bypass DataPermissionInterceptor") made
+            // every controller-level @PreAuthorize("hasAnyRole('MANAGER',
+            // 'ADMIN')") trivially pass, hiding real authorization
+            // bugs (e.g. an engineer could approve IN_REVIEW reports).
+            // The interceptor is now disabled in dev profile (see
+            // DataPermissionInterceptor#devProfile), so we don't need
+            // this escape hatch anymore.
+            String roles = dev.roles;
 
             JwtTokenProvider.AuthPrincipal principal = new JwtTokenProvider.AuthPrincipal(
                     dev.id, dev.email, dev.displayName, roles, null);

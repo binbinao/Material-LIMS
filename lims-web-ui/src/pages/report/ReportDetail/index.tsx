@@ -158,9 +158,9 @@ const ReportDetail: React.FC = () => {
 
           <Card title="Document" style={{ marginBottom: 16 }}>
             <Space>
-              {report.fileUrl && <Button type="link" href={report.fileUrl} target="_blank">Download Word</Button>}
+              <Button type="link" href={`/api/v1/reports/${report.id}/sample-word`} target="_blank">Download Word</Button>
               {report.pdfUrl && <Button type="link" href={report.pdfUrl} target="_blank">Download PDF</Button>}
-              {!report.fileUrl && !report.pdfUrl && <span style={{ color: '#999' }}>No document available yet</span>}
+              {!report.pdfUrl && <span style={{ color: '#999' }}>No PDF yet</span>}
             </Space>
           </Card>
 

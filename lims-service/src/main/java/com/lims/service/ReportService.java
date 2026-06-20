@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lims.common.exception.BusinessException;
 import com.lims.common.exception.ErrorCode;
+import com.lims.common.security.SecurityUtils;
 import com.lims.dao.mapper.AnalysisTaskMapper;
 import com.lims.dao.mapper.ReportMapper;
 import com.lims.dao.mapper.RequestMapper;
@@ -12,13 +13,17 @@ import com.lims.model.entity.Request;
 import com.lims.model.enums.ReportStatus;
 import com.lims.model.enums.RequestStatus;
 import com.lims.service.report.ReportTemplateService;
+import com.lims.service.report.SampleReportBuilder;
 import com.lims.service.report.WordToPdfConverter;
 import com.lims.service.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -158,6 +163,12 @@ public class ReportService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED,
                     "Approver must not be the report author");
         }
+        // Defense-in-depth: even if a future controller forgets
+        // @PreAuthorize("hasAnyRole('MANAGER','ADMIN')"), the service
+        // still refuses non-manager/non-admin callers. The caller is
+        // the current authenticated user; roles are read from the
+        // SecurityContext via SecurityUtils.
+        requireRoleAny(managerId, "MANAGER", "ADMIN");
 
         report.setStatus(ReportStatus.APPROVED.getValue());
         report.setApprovedBy(managerId);
@@ -174,6 +185,12 @@ public class ReportService {
     public void rejectReport(String reportId, String managerId) {
         Report report = reportMapper.selectById(reportId);
         if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        // Defense-in-depth: same role guard as approve. The dev profile
+        // regression (engineer could reject IN_REVIEW reports because
+        // @EnableMethodSecurity was scoped to prod-only) is what
+        // surfaced this gap — push the check down to the service so
+        // no future controller wiring can quietly bypass it.
+        requireRoleAny(managerId, "MANAGER", "ADMIN");
 
         report.setStatus(ReportStatus.REVISING.getValue());
         report.setRejectedBy(managerId);
@@ -235,6 +252,34 @@ public class ReportService {
     }
 
     /**
+     * Generate a randomized sample .docx for the report and return it as
+     * a byte array. The content is built on the fly with Apache POI (no
+     * template file needed) and uses {@link ThreadLocalRandom} so each
+     * call produces a different sample — different analysis methods,
+     * different result values, different pass/fail conclusion.
+     *
+     * Intended for the dev environment and the E2E demo: even reports
+     * without a real {@code file_url} (e.g. seeded rows where
+     * {@code file_url} is a placeholder string like
+     * "/reports/rpt-001/V1.1.docx") can be downloaded. The download
+     * endpoint exposes this method; see ReportController.sampleWord.
+     */
+    public byte[] getSampleWordBytes(String reportId) {
+        Report report = reportMapper.selectById(reportId);
+        if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        try (XWPFDocument doc = new XWPFDocument();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            com.lims.service.report.SampleReportBuilder.build(doc, report);
+            doc.write(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED,
+                    "Failed to build sample docx: " + e.getMessage());
+        }
+    }
+
+
+    /**
      * Sync report content from SharePoint (placeholder until SharePoint is wired)
      */
     @Transactional(rollbackFor = Exception.class)
@@ -250,6 +295,29 @@ public class ReportService {
         if (!report.getAuthorId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
+    }
+
+    /**
+     * Defense-in-depth role guard for state-transitioning actions
+     * (approve / reject). Reads roles from the SecurityContext (so the
+     * check is independent of the {@code userId} parameter, which is
+     * just for audit) and refuses if none of {@code allowed} matches.
+     * Throws ACCESS_DENIED on failure.
+     *
+     * Why a service-layer check at all: @PreAuthorize on the controller
+     * is the first line of defense, but historically it was scoped to
+     * prod only (see SecurityConfig — bug fixed in this commit), which
+     * let engineer-dev users approve IN_REVIEW reports in dev. The
+     * controller annotation is now active in both profiles, but pushing
+     * the check down here means a future controller that forgets the
+     * annotation still cannot bypass the rule.
+     */
+    private void requireRoleAny(String userId, String... allowed) {
+        for (String r : allowed) {
+            if (SecurityUtils.hasRole(r)) return;
+        }
+        throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                "Operation requires one of roles: " + String.join(",", allowed));
     }
 
     private String incrementVersion(String currentVersion) {

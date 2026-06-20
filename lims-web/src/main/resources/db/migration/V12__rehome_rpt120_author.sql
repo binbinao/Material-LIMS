@@ -1,0 +1,24 @@
+-- V12: Re-home rpt-120's author from 'user-admin-001' to 'user-engineer-001'.
+--
+-- rpt-120 is the only report in the seed whose author is
+-- 'user-admin-001'. ADMIN users don't author reports in this app —
+-- the report-authoring role is ENGINEER, and the dev "engineer"
+-- principal is 'user-engineer-001' (see DevAuthFilter). The
+-- 'user-admin-001' author on rpt-120 is a stale artefact from a
+-- dev session that ran before the report-authoring flow was tied
+-- to a real engineer principal.
+--
+-- Why this matters: with author_id = 'user-admin-001', the
+-- manager dev user ('user-manager-001') can still approve the
+-- report (four-eyes holds, since 'user-admin-001' != 'user-manager-001'),
+-- but engineer dev users hit ACCESS_DENIED on every Submit
+-- attempt (validateReportOwnership rejects because
+-- 'user-admin-001' != 'user-engineer-001'). Users reported
+-- "rpt-120 报告无法提交" because of this.
+--
+-- Re-homing to 'user-engineer-001' makes the report follow the
+-- normal engineer-→manager flow that every other seeded report
+-- follows. The four-eyes check continues to hold for all
+-- subsequent transitions.
+
+UPDATE report SET author_id = 'user-engineer-001' WHERE id = 'rpt-120';
