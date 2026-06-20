@@ -8,6 +8,7 @@ import {
   submitRequest,
   assignRequest,
 } from '@/services/requestService';
+import { useParams } from '@umijs/max';
 import { renderWithProviders } from '@/tests/helpers/render';
 import RequestDetail from '../index';
 
@@ -24,6 +25,7 @@ const baseRequest = {
 describe('RequestDetail buttons', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useParams as jest.Mock).mockReturnValue({ id: 'req-001' });
     (getRequest as jest.Mock).mockResolvedValue({ code: 200, data: baseRequest });
     (getRequestTasks as jest.Mock).mockResolvedValue({ code: 200, data: [] });
     (getRequestWorkflow as jest.Mock).mockResolvedValue({ code: 200, data: { tasks: [] } });

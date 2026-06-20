@@ -1,6 +1,6 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { Card, Descriptions, Tag, Button, Steps, Table, Modal, Form, Input, App, Divider, Space, Timeline, Select } from 'antd';
-import { useParams, history } from '@umijs/max';
+import { useParams, history, useAccess } from '@umijs/max';
 import { useRequest } from 'ahooks';
 import { useState } from 'react';
 import { getRequest, getRequestTasks, getRequestWorkflow, submitRequest, assignRequest, rejectRequest, receiveSample, startReporting, completeRequest, updateAnalysisTask, getAdminUsers, createReport } from '@/services/requestService';
