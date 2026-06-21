@@ -47,7 +47,7 @@ class ReportTaskIdRemovedTest {
                     "lims-web/src/main/resources/db/migration");
             if (Files.isDirectory(migrationDir)) {
                 try (Stream<Path> stream = Files.list(migrationDir)) {
-                    stream.filter(f -> f.getFileName().toString().startsWith("V4"))
+                    stream.filter(f -> f.getFileName().toString().startsWith("V8"))
                             .findFirst()
                             .ifPresent(f -> found[0] = f);
                 }
@@ -55,12 +55,12 @@ class ReportTaskIdRemovedTest {
             }
         }
         assertTrue(found[0] != null,
-                "Flyway V4 migration dropping task_id must exist");
+                "Flyway V8 migration dropping task_id must exist");
         String mig = Files.readString(found[0]);
         assertTrue(mig.contains("task_id"),
-                "V4 migration must drop task_id column");
+                "V8 migration must drop task_id column");
         assertTrue(mig.contains("report"),
-                "V4 migration must target the report table");
+                "V8 migration must target the report table");
     }
 
     @Test
