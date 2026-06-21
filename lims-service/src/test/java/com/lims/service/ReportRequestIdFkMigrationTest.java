@@ -38,7 +38,7 @@ class ReportRequestIdFkMigrationTest {
                     "lims-web/src/main/resources/db/migration");
             if (Files.isDirectory(migrationDir)) {
                 try (Stream<Path> stream = Files.list(migrationDir)) {
-                    stream.filter(f -> f.getFileName().toString().startsWith("V5"))
+                    stream.filter(f -> f.getFileName().toString().startsWith("V9"))
                             .findFirst()
                             .ifPresent(f -> found[0] = f);
                 }
@@ -46,15 +46,15 @@ class ReportRequestIdFkMigrationTest {
             }
         }
         assertTrue(found[0] != null,
-                "Flyway V5 migration adding report.request_id FK must exist");
+                "Flyway V9 migration adding report.request_id FK must exist");
         String mig = Files.readString(found[0]);
         assertTrue(mig.contains("request_id"),
-                "V5 migration must reference request_id column");
+                "V9 migration must reference request_id column");
         assertTrue(mig.contains("REFERENCES"),
-                "V5 migration must add a REFERENCES constraint");
+                "V9 migration must add a REFERENCES constraint");
         assertTrue(mig.contains("report"),
-                "V5 migration must target the report table");
+                "V9 migration must target the report table");
         assertTrue(mig.contains("request"),
-                "V5 migration must reference the request table");
+                "V9 migration must reference the request table");
     }
 }
