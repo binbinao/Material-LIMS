@@ -16,10 +16,23 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // Accept-header is included because some browsers also list it
+        // explicitly in Access-Control-Request-Headers even when it is
+        // a CORS-safelisted request header. X-Dev-User is required by
+        // DevAuthFilter (see com.lims.web.security.DevAuthFilter) and
+        // must be allowed or every dev-mode fetch will fail the
+        // preflight with 403 "Invalid CORS request" — this silently
+        // breaks the login page in dev.
         registry.addMapping("/api/**")
                 .allowedOrigins(allowedOrigins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH")
-                .allowedHeaders("Authorization", "Content-Type", "X-Requested-With")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedHeaders(
+                        "Authorization",
+                        "Content-Type",
+                        "X-Requested-With",
+                        "X-Dev-User",
+                        "Accept")
+                .exposedHeaders("Set-Cookie")
                 .allowCredentials(true)
                 .maxAge(3600);
     }
