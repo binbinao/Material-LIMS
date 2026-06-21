@@ -257,6 +257,28 @@ public class RequestService {
     }
 
     /**
+     * Advance a request to APPROVING state. Issue #20: only MANAGER/ADMIN
+     * may trigger this auto-advance. The assignee (ENGINEER/TECHNICIAN)
+     * finishing their own task must NOT silently flip the request into
+     * manager-review state — that bypasses the manager's manual review
+     * step in the BPMN flow. The request stays in REPORTING until a
+     * manager explicitly approves.
+     */
+    private void advanceToApproval(Request request) {
+        if (request == null || !RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
+            return;
+        }
+        JwtTokenProvider.AuthPrincipal principal = SecurityUtils.getCurrentPrincipal();
+        if (principal == null
+                || (!principal.hasRole("ADMIN") && !principal.hasRole("MANAGER"))) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                    "Only MANAGER/ADMIN may advance a request to APPROVING");
+        }
+        request.setStatus(RequestStatus.APPROVING.getValue());
+        requestMapper.updateById(request);
+    }
+
+    /**
      * Complete request - transition from APPROVING to COMPLETED.
      *
      * Issue (review H1): previously this method had no state guard, so a
@@ -334,21 +356,11 @@ public class RequestService {
                             .ne(AnalysisTask::getStatus, "COMPLETED"));
             if (pendingCount == 0) {
                 // Issue #20: only MANAGER/ADMIN may auto-advance to APPROVING.
-                // The assignee (ENGINEER/TECHNICIAN) finishing their own
-                // task must NOT silently flip the request into manager-review
-                // state — that bypasses the manager's manual review step in
-                // the BPMN flow. The request stays in REPORTING until a
-                // manager explicitly approves.
-                JwtTokenProvider.AuthPrincipal p2 = SecurityUtils.getCurrentPrincipal();
-                boolean callerCanAdvance = p2 != null
-                        && (p2.hasRole("ADMIN") || p2.hasRole("MANAGER"));
-                if (callerCanAdvance) {
-                    Request request = requestMapper.selectById(task.getRequestId());
-                    if (request != null && RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
-                        request.setStatus(RequestStatus.APPROVING.getValue());
-                        requestMapper.updateById(request);
-                    }
-                }
+                // The role gate lives in advanceToApproval — non-managers
+                // finishing their own task must NOT silently flip the request
+                // into manager-review state. See advanceToApproval Javadoc.
+                Request request = requestMapper.selectById(task.getRequestId());
+                advanceToApproval(request);
             }
         }
 
