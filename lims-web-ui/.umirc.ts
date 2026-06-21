@@ -29,9 +29,11 @@ export default defineConfig({
         initialState: props?.initialState,
       }),
     ],
-    // Defensive: if a future Umi upgrade changes how rightRender.tsx
-    // decides whether to wrap the default avatar in a dropdown, our
-    // logout still works because it goes through the same code path.
+    // Wires Umi's built-in avatar dropdown (rightRender.tsx) to our
+    // logout. Currently unreachable because actionsRender above replaces
+    // the default avatar slot, but kept as a defense-in-depth: if a
+    // future Umi change regenerates rightRender.tsx without our manual
+    // override, the built-in dropdown still gets a working logout path.
     logout: async () => {
       const { logout } = await import('./src/utils/auth');
       await logout();
