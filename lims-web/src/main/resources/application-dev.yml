@@ -58,7 +58,14 @@ azure:
     redirect-uri: https://localhost:8080/api/v1/auth/callback
 
 # MinIO
+# FileStorageService reads these via @Value (default minio.enabled=false
+# in application.yml). Dev profile enables MinIO by default so knowledge
+# uploads, report attachments, etc. land in the material-lims_minio_data
+# volume and survive docker-compose down/up. Override endpoint/keys here
+# only if pointing at a different MinIO instance; in production use
+# env vars (MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY).
 minio:
+  enabled: true
   endpoint: http://localhost:9000
   access-key: minioadmin
   secret-key: minioadmin
