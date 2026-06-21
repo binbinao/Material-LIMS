@@ -4,8 +4,18 @@
 -- unit tests) does not regenerate it. See docs/superpowers/specs/2026-06-06-testing-infrastructure-design.md §4.3.
 -- Transformations:
 --   * TIMESTAMP DEFAULT NOW()         -> TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+--   * SET MODE PostgreSQL             -> H2 reserves 'year' as a data type; the
+--                                        holiday table's `year` column triggers
+--                                        a syntax error in default H2 mode.
+--                                        PostgreSQL mode keeps it an identifier.
 --   * Other PG-specific features (CHECK, partial indexes, IF NOT EXISTS) are
 --     already supported by H2 2.x; left unchanged.
+
+SET MODE PostgreSQL;
+-- H2 reserves YEAR as a data-type keyword; allow it as a plain identifier
+-- so the holiday.year column name (which PostgreSQL accepts unquoted) works
+-- here without renaming the entity field.
+SET NON_KEYWORDS YEAR;
 
 -- Material LIMS Database Schema
 -- PostgreSQL 15+
@@ -203,6 +213,29 @@ CREATE TABLE analysis_item (
 );
 
 -- =============================================
+-- System Tables
+-- =============================================
+-- sys_user must be created BEFORE request/analysis_task/sample/report
+-- because those tables have foreign keys into sys_user(id).
+-- PostgreSQL allows deferred constraints, H2 does not — so the table
+-- is defined here, in the System Tables section, but the CREATE TABLE
+-- statement is positioned ahead of the Core Business Tables below.
+
+CREATE TABLE sys_user (
+    id VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(200) NOT NULL UNIQUE,
+    display_name VARCHAR(200) NOT NULL,
+    login_id VARCHAR(200),
+    dept_id VARCHAR(36) REFERENCES department(id),
+    roles VARCHAR(100) DEFAULT 'REQUESTER',
+    external_id VARCHAR(200),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================
 -- Core Business Tables
 -- =============================================
 
@@ -331,28 +364,13 @@ CREATE TABLE equipment_repair (
 -- =============================================
 -- System Tables
 -- =============================================
-
-CREATE TABLE sys_user (
-    id VARCHAR(36) PRIMARY KEY,
-    email VARCHAR(200) NOT NULL UNIQUE,
-    display_name VARCHAR(200) NOT NULL,
-    login_id VARCHAR(200),
-    dept_id VARCHAR(36) REFERENCES department(id),
-    roles VARCHAR(100) DEFAULT 'REQUESTER',
-    external_id VARCHAR(200),
-    is_active BOOLEAN DEFAULT TRUE,
-    last_login_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- sys_user must be created BEFORE request/analysis_task/sample/report
--- so we need to reorder. PostgreSQL allows deferred constraints,
--- but for simplicity, we create sys_user first.
-
--- Note: The CREATE TABLE statements above reference sys_user before it's defined.
--- In PostgreSQL, this works if we use deferred constraints or create tables in order.
--- Let's fix this by noting that sys_user should be created first.
+-- Note: the CREATE TABLE sys_user statement is intentionally positioned
+-- earlier in this file (in the first "System Tables" section, just
+-- before the Core Business Tables) so that request/analysis_task/sample/
+-- report can declare foreign keys into sys_user. PostgreSQL allows
+-- deferred constraints; H2 does not. The remaining system tables
+-- below (sys_operation_log, sys_i18n_message) only reference sys_user
+-- (or already-defined tables) and therefore can sit here.
 
 CREATE TABLE sys_operation_log (
     id VARCHAR(36) PRIMARY KEY,
@@ -379,24 +397,24 @@ CREATE TABLE sys_i18n_message (
 -- Indexes
 -- =============================================
 
-CREATE INDEX idx_request_requester ON request(requester_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_request_status ON request(status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_request_brand ON request(brand_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_request_due_date ON request(due_date) WHERE deleted_at IS NULL;
-CREATE INDEX idx_request_created_at ON request(created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_request_requester ON request(requester_id);
+CREATE INDEX idx_request_status ON request(status);
+CREATE INDEX idx_request_brand ON request(brand_id);
+CREATE INDEX idx_request_due_date ON request(due_date);
+CREATE INDEX idx_request_created_at ON request(created_at DESC);
 
-CREATE INDEX idx_task_request ON analysis_task(request_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_task_assignee ON analysis_task(assignee_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_task_status ON analysis_task(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_task_request ON analysis_task(request_id);
+CREATE INDEX idx_task_assignee ON analysis_task(assignee_id);
+CREATE INDEX idx_task_status ON analysis_task(status);
 
-CREATE INDEX idx_report_request ON report(request_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_report_author ON report(author_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_report_status ON report(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_report_request ON report(request_id);
+CREATE INDEX idx_report_author ON report(author_id);
+CREATE INDEX idx_report_status ON report(status);
 
-CREATE INDEX idx_sample_request ON sample(request_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_sample_request ON sample(request_id);
 
-CREATE INDEX idx_repair_equipment ON equipment_repair(equipment_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_repair_status ON equipment_repair(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_repair_equipment ON equipment_repair(equipment_id);
+CREATE INDEX idx_repair_status ON equipment_repair(status);
 
 CREATE INDEX idx_holiday_year ON holiday(year);
 
@@ -406,8 +424,8 @@ CREATE INDEX idx_log_action ON sys_operation_log(action);
 CREATE INDEX idx_log_created_at ON sys_operation_log(created_at DESC);
 
 -- Phase 5: extra indexes for hot paths
-CREATE UNIQUE INDEX IF NOT EXISTS uk_request_no ON request(request_no) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment(status) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_doc(category) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_knowledge_updated_at ON knowledge_doc(updated_at DESC) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_request_no ON request(request_no);
+CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment(status);
+CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_doc(category);
+CREATE INDEX IF NOT EXISTS idx_knowledge_updated_at ON knowledge_doc(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_i18n_locale ON sys_i18n_message(locale);
