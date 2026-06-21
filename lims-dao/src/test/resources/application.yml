@@ -1,0 +1,20 @@
+# Test-only application.yml for lims-dao integration tests.
+#
+# The canonical MyBatis-Plus configuration lives in
+# lims-web/src/main/resources/application.yml. lims-dao is a library
+# module (no @SpringBootApplication), so it does not depend on lims-web
+# and therefore does not see that file on the test classpath. Without
+# these settings, MyBatis-Plus falls back to its built-in defaults
+# (logic-delete-value=1, logic-not-delete-value=0) which produce
+# `UPDATE ... SET deleted_at = 1 WHERE ... AND deleted_at = 0` — and
+# H2 strict-types rejects comparing TIMESTAMP to INTEGER.
+#
+# Only the MyBatis-Plus global-config block is replicated here; the
+# remaining config (DataSource URL, schema init, etc.) is supplied by
+# AbstractDaoIT's @DynamicPropertySource.
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deletedAt
+      logic-delete-value: NOW()
+      logic-not-delete-value: "NULL"
