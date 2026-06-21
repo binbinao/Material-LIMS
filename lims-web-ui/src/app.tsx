@@ -40,12 +40,20 @@ export const request = {
       // Dev-only: DevAuthFilter reads the X-Dev-User header to synthesize
       // a principal without a real JWT. The username is stored in
       // localStorage by the Login page's "Dev Quick Login" form so it
-      // survives page reloads. No-op in production (localStorage empty).
-      const devUser = typeof window !== 'undefined'
-        ? window.localStorage?.getItem('dev_user')
-        : null;
+      // survives page reloads.
+      //
+      // The default of 'requester' (mapped by DevAuthFilter to
+      // user-requester-001) means a freshly opened dev tab has a
+      // valid DB identity even before the user clicks "Dev Login".
+      // Without this default, DevAuthFilter falls back to its
+      // DEV_USER_ID sentinel 'dev-user-0001' which is NOT in the
+      // database — every user-scoped query then returns zero/empty
+      // rows even when the DB has plenty of seeded data.
       const headers = { ...(config?.headers || {}) };
-      if (devUser && !headers['X-Dev-User']) {
+      if (!headers['X-Dev-User'] && !headers['x-dev-user']) {
+        const devUser = typeof window !== 'undefined'
+          ? (window.localStorage?.getItem('dev_user') || 'requester')
+          : 'requester';
         headers['X-Dev-User'] = devUser;
       }
       return { ...config, headers, skipErrorHandler: true };
@@ -58,11 +66,18 @@ export async function getInitialState(): Promise<{
   currentUser?: API.CurrentUser;
 }> {
   try {
+    // Default to 'requester' (mapped by DevAuthFilter to
+    // user-requester-001) when localStorage is empty — see the
+    // matching comment in requestInterceptors above for the
+    // motivation. The same sentinel is used by the interceptor
+    // chain, so /auth/me and subsequent /api calls stay consistent.
     const devUser = typeof window !== 'undefined'
-      ? window.localStorage?.getItem('dev_user')
-      : null;
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (devUser) headers['X-Dev-User'] = devUser;
+      ? (window.localStorage?.getItem('dev_user') || 'requester')
+      : 'requester';
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'X-Dev-User': devUser,
+    };
     const res = await fetch('/api/v1/auth/me', { headers, credentials: 'include' });
     // Issue #13: a 401 means the JWT is missing/expired. Treat that as
     // "not logged in" rather than as a successful response with a
