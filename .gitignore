@@ -37,13 +37,11 @@ logs/
 # Docker
 postgres_data/
 
-<<<<<<< HEAD
+# Git worktrees (project-local isolated workspaces)
+.worktrees/
+
 # Playwright E2E snapshots
 .playwright-cli/
 
 # UAT test output
 uat-out/
-=======
-# Git worktrees (project-local isolated workspaces)
-.worktrees/
->>>>>>> 7fa7a64 (build: ignore .worktrees/ for project-local isolated workspaces)
