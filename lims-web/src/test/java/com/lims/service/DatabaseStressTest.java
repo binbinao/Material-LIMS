@@ -23,8 +23,8 @@ public class DatabaseStressTest {
     @Autowired
     private RequestService requestService;
 
-    @Autowired
-    private AnalysisTaskService analysisTaskService;
+    // @Autowired
+    // private AnalysisTaskService analysisTaskService; // 服务类不存在，暂时注释掉
 
     /**
      * 乐观锁压力测试 - 模拟100个并发更新

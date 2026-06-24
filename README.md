@@ -25,12 +25,47 @@ material-lims/
 ├── lims-workflow/        # Flowable工作流模块
 ├── lims-admin/           # 系统管理模块
 ├── lims-web/             # Web层（Controller、启动入口）
-├── lims-web-ui/          # 前端React项目（待创建）
+├── lims-web-ui/          # 前端React项目
+│   ├── src/
+│   │   ├── components/   # 可复用组件
+│   │   │   ├── LogoutButton/          # 左下角退出按钮
+│   │   │   ├── LogoutConfirmModal/    # 退出确认对话框
+│   │   │   └── EnhancedLogoutButton/  # 增强退出按钮
+│   │   ├── layouts/       # 布局组件
+│   │   │   └── CustomLayout/           # 自定义布局（集成左下角退出）
+│   │   ├── utils/         # 工具函数
+│   │   │   └── auth.ts    # 认证工具（支持多种退出方式）
+│   │   └── pages/         # 页面组件
+│   └── config/            # 配置文件
 ├── docs/                 # 设计文档
 │   ├── design/           # 技术方案
-│   └── writing/          # 项目简报
+│   ├── writing/          # 项目简报
+│   └── runbook/          # 操作手册
+│       ├── 左下角退出功能指南.md
+│       └── typescript-reviewer-guide.md
 └── docker-compose.yml    # 开发环境容器编排（兼容 Podman Compose）
 ```
+
+## 用户体验增强特性
+
+### 🎯 左下角退出功能
+
+Material LIMS 引入了创新的左下角退出功能，提供更直观的用户体验：
+
+**核心特性**:
+- **直观定位**: 退出按钮固定在界面左下角，符合用户操作习惯
+- **双重保障**: 保留右上角用户菜单的同时，增加便捷退出入口
+- **智能确认**: 退出前显示确认对话框，防止误操作
+- **状态管理**: 支持并发控制，避免重复退出操作
+- **错误处理**: 完善的错误恢复机制，确保退出流程可靠性
+
+**技术亮点**:
+- 响应式设计，适配不同屏幕尺寸
+- Material Design 风格，与整体界面保持一致
+- 支持键盘导航和屏幕阅读器
+- 完整的单元测试覆盖
+
+**详细文档**: [左下角退出功能指南](docs/runbook/左下角退出功能指南.md)
 
 ## 快速开始
 

@@ -1,7 +1,9 @@
 #!/bin/sh
 # ============================================================
-# doc-updater pre-commit hook
-# 每次 commit 前自动检查 & 更新 api-summary.md + README 模块表
+# Material LIMS pre-commit hook
+# 每次 commit 前自动检查:
+# 1. TypeScript代码审查 (lims-web-ui/)
+# 2. Java文档同步 (lims-web/)
 # ============================================================
 
 set -e
@@ -10,22 +12,67 @@ set -e
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$HOOK_DIR")"
 
+# 检查是否有 TypeScript 文件被修改
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM | grep 'lims-web-ui/.*\.tsx?$' || true)
+
 # 检查是否有 Java Controller 文件被修改
 STAGED_JAVA=$(git diff --cached --name-only --diff-filter=ACM | grep 'lims-web/src/main/java/com/lims/web/controller/.*\.java$' || true)
 
-if [ -z "$STAGED_JAVA" ]; then
-    echo "📚 [doc-updater] 未检测到 Controller 变更，跳过文档检查"
+# 检查是否跳过审查
+SKIP_REVIEW=$(git log -1 --pretty=%B | grep '\[skip-review\]' || true)
+
+if [ -n "$SKIP_REVIEW" ]; then
+    echo "⏭️  [pre-commit] 检测到 [skip-review]，跳过代码审查"
     exit 0
 fi
 
-echo "📚 [doc-updater] 检测到 Controller 变更，运行文档同步..."
-echo "   变更文件:"
-echo "$STAGED_JAVA" | while read f; do echo "     - $f"; done
+# ============================================================
+# TypeScript 代码审查
+# ============================================================
+if [ -n "$STAGED_TS" ]; then
+    echo "🔍 [typescript-reviewer] 检测到 TypeScript 变更，运行代码审查..."
+    echo "   变更文件:"
+    echo "$STAGED_TS" | while read f; do echo "     - $f"; done
+    
+    # 运行 TypeScript 审查 (非严格模式，允许警告)
+    if node "$PROJECT_ROOT/scripts/typescript-reviewer.mjs" --fix-only; then
+        echo "✅ [typescript-reviewer] TypeScript 审查通过"
+        
+        # 检查是否有自动修复的文件需要重新暂存
+        FIXED_FILES=$(git diff --name-only)
+        if [ -n "$FIXED_FILES" ]; then
+            echo "🔧 [typescript-reviewer] 自动修复文件:"
+            echo "$FIXED_FILES" | while read f; do echo "     - $f"; done
+            git add $FIXED_FILES
+            echo "✅ [typescript-reviewer] 修复文件已暂存"
+        fi
+    else
+        echo "❌ [typescript-reviewer] TypeScript 审查失败"
+        echo "💡 建议运行: node scripts/typescript-reviewer.mjs 查看详细问题"
+        exit 1
+    fi
+else
+    echo "📦 [typescript-reviewer] 未检测到 TypeScript 变更，跳过审查"
+fi
 
-# 运行 doc-updater
-node "$PROJECT_ROOT/scripts/doc-updater.mjs" --sync-readme
+# ============================================================
+# Java 文档同步
+# ============================================================
+if [ -n "$STAGED_JAVA" ]; then
+    echo "📚 [doc-updater] 检测到 Controller 变更，运行文档同步..."
+    echo "   变更文件:"
+    echo "$STAGED_JAVA" | while read f; do echo "     - $f"; done
 
-# 将更新的文档添加到 staging area
-git add "$PROJECT_ROOT/docs/runbook/api-summary.md" "$PROJECT_ROOT/README.md"
+    # 运行 doc-updater
+    node "$PROJECT_ROOT/scripts/doc-updater.mjs" --sync-readme
 
-echo "✅ [doc-updater] 文档已同步并暂存"
+    # 将更新的文档添加到 staging area
+    git add "$PROJECT_ROOT/docs/runbook/api-summary.md" "$PROJECT_ROOT/README.md"
+
+    echo "✅ [doc-updater] 文档已同步并暂存"
+else
+    echo "📚 [doc-updater] 未检测到 Controller 变更，跳过文档检查"
+fi
+
+echo ""
+echo "🎉 [pre-commit] 所有检查通过，可以提交！"

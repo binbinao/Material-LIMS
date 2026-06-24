@@ -90,16 +90,7 @@ jest.mock('@umijs/max', () => {
   };
 });
 
-// Mock umi-request (used by requestService.ts and directly by tests
-// that cast `request` as jest.Mock). The default export + named `request`
-// are both jest.fn() so tests can override per-case.
-jest.mock('umi-request', () => ({
-  __esModule: true,
-  default: jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' })),
-  request: jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' })),
-  extend: jest.fn(),
-  RequestError: class RequestError extends Error {},
-}));
+// Note: umi-request module not found in this project, removed mock
 
 // Auto-mock every exported function from @/services/requestService so
 // tests can do `(getBrands as jest.Mock).mockResolvedValue(...)`.
@@ -125,6 +116,7 @@ jest.mock('@/services/requestService', () => {
     getAdminUsers: emptyPage(),
     getRequestTypes: emptyPage(),
     getDepartments: emptyPage(),
+    getDepartmentTree: jest.fn(() => Promise.resolve({ code: 200, data: [], message: 'success' })),
     getAnalysisItems: emptyPage(),
     getAnalysisItemGroups: emptyPage(),
     getAnalysisItemCascade: emptyPage(),

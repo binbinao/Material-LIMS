@@ -1,4 +1,4 @@
-import { test as base, APIRequestContext, APIResponse } from '@playwright/test';
+import { test as base, APIRequestContext, APIResponse, type Playwright } from '@playwright/test';
 
 /**
  * Material-LIMS E2E 测试 Fixtures
@@ -95,21 +95,40 @@ export interface BrandEntity {
 
 type ApiFixtures = {
   api: APIRequestContext;
+  /** ENGINEER 角色 API（用于创建报告等操作） */
+  engineerApi: APIRequestContext;
+  /** MANAGER 角色 API（用于审批等需要四眼原则的操作） */
+  managerApi: APIRequestContext;
 };
 
+function createApiContext(playwright: Playwright, devUser: string): Promise<APIRequestContext> {
+  return playwright.request.newContext({
+    baseURL: 'http://localhost:8080',
+    extraHTTPHeaders: {
+      'Content-Type': 'application/json',
+      'X-Dev-User': devUser,
+    },
+  });
+}
+
 /**
- * 扩展基础 test，注入 API request context
+ * 扩展基础 test，注入多角色 API request context
  */
 export const test = base.extend<ApiFixtures>({
   api: async ({ playwright }, use) => {
-    const apiContext = await playwright.request.newContext({
-      baseURL: 'http://localhost:8080',
-      extraHTTPHeaders: {
-        'Content-Type': 'application/json',
-      },
-    });
-    await use(apiContext);
-    await apiContext.dispose();
+    const ctx = await createApiContext(playwright, '');
+    await use(ctx);
+    await ctx.dispose();
+  },
+  engineerApi: async ({ playwright }, use) => {
+    const ctx = await createApiContext(playwright, 'engineer');
+    await use(ctx);
+    await ctx.dispose();
+  },
+  managerApi: async ({ playwright }, use) => {
+    const ctx = await createApiContext(playwright, 'manager');
+    await use(ctx);
+    await ctx.dispose();
   },
 });
 
@@ -139,3 +158,40 @@ export async function getData<T = unknown>(res: APIResponse): Promise<T> {
 
 /** 等待指定毫秒 */
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 轮询等待实体状态变更
+ *
+ * 适用场景：Flowable 工作流推进等异步操作，状态切换可能存在延迟。
+ * 避免硬编码 sleep，改为条件轮询，超时后抛出明确错误。
+ *
+ * @param api         - Playwright API request context
+ * @param url         - 要轮询的 GET 端点（如 `/api/v1/requests/${id}`）
+ * @param expectedStatus - 期望的状态值
+ * @param maxRetries  - 最大重试次数（默认 10）
+ * @param intervalMs  - 每次轮询间隔（默认 1000ms）
+ * @returns 实体数据（达到期望状态时）
+ */
+export async function waitForStatus<T extends { status: string }>(
+  api: APIRequestContext,
+  url: string,
+  expectedStatus: string,
+  maxRetries: number = 10,
+  intervalMs: number = 1000,
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    const res = await api.get(url);
+    await assertOk(res, `waitForStatus(${expectedStatus}) attempt ${i + 1}`);
+    const data = await getData<T>(res);
+    if (data.status === expectedStatus) {
+      return data;
+    }
+    if (i < maxRetries - 1) {
+      await sleep(intervalMs);
+    }
+  }
+  throw new Error(
+    `waitForStatus timed out after ${maxRetries} attempts: ` +
+    `expected status "${expectedStatus}" on ${url}`
+  );
+}

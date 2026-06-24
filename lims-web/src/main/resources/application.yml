@@ -103,12 +103,38 @@ resilience4j:
         failureRateThreshold: 50
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 3
+      fileStorage:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      workflow:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+  retry:
+    instances:
+      fileStorage:
+        maxAttempts: 3
+        waitDuration: 1s
+        retryExceptions:
+          - java.io.IOException
+          - io.minio.errors.MinioException
+      workflow:
+        maxAttempts: 2
+        waitDuration: 500ms
   timelimiter:
     instances:
       partService:
         timeoutDuration: 3s
       supplierService:
         timeoutDuration: 3s
+      fileStorage:
+        timeoutDuration: 10s
+      workflow:
+        timeoutDuration: 5s
 
 # Logging
 logging:

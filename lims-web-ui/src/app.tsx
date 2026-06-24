@@ -1,6 +1,7 @@
 // Umi runtime configuration
 import { App as AntApp } from 'antd';
 import React from 'react';
+import LayoutWrapper from './layouts';
 
 /**
  * Wrap the whole app in <AntApp> so that App.useApp() inside any page
@@ -9,7 +10,10 @@ import React from 'react';
  * `TypeError: message.error is not a function` in production builds).
  */
 export function rootContainer(container: React.ReactNode) {
-  return React.createElement(AntApp, { style: { height: '100%' } }, container);
+  const appContainer = React.createElement(AntApp, { style: { height: '100%' } }, container);
+  
+  // 集成自定义布局包装器
+  return React.createElement(LayoutWrapper, {}, appContainer);
 }
 
 export const request = {

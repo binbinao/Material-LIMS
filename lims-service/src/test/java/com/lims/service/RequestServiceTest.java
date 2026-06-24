@@ -252,11 +252,13 @@ class RequestServiceTest {
             when(requestTypeMapper.selectById(anyString())).thenReturn(null);
 
             AnalysisItem item1 = new AnalysisItem();
+            item1.setId("item-1");
             item1.setCost(new BigDecimal("100.50"));
             AnalysisItem item2 = new AnalysisItem();
+            item2.setId("item-2");
             item2.setCost(new BigDecimal("200.00"));
-            when(analysisItemMapper.selectById("item-1")).thenReturn(item1);
-            when(analysisItemMapper.selectById("item-2")).thenReturn(item2);
+            when(analysisItemMapper.selectBatchIds(List.of("item-1", "item-2")))
+                    .thenReturn(List.of(item1, item2));
 
             Request result = requestService.createRequest(dto, USER_ID);
 
@@ -278,9 +280,10 @@ class RequestServiceTest {
             when(requestTypeMapper.selectById(anyString())).thenReturn(null);
 
             AnalysisItem item1 = new AnalysisItem();
+            item1.setId("item-1");
             item1.setCost(new BigDecimal("50"));
-            when(analysisItemMapper.selectById("item-1")).thenReturn(item1);
-            when(analysisItemMapper.selectById("missing")).thenReturn(null);
+            when(analysisItemMapper.selectBatchIds(List.of("item-1", "missing")))
+                    .thenReturn(List.of(item1));
 
             Request result = requestService.createRequest(dto, USER_ID);
 
@@ -297,8 +300,10 @@ class RequestServiceTest {
             when(requestTypeMapper.selectById(anyString())).thenReturn(null);
 
             AnalysisItem item1 = new AnalysisItem();
+            item1.setId("item-1");
             item1.setCost(null);
-            when(analysisItemMapper.selectById("item-1")).thenReturn(item1);
+            when(analysisItemMapper.selectBatchIds(List.of("item-1")))
+                    .thenReturn(List.of(item1));
 
             Request result = requestService.createRequest(dto, USER_ID);
 

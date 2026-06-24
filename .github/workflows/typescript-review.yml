@@ -1,0 +1,186 @@
+name: TypeScript Code Review
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # 每天凌晨2点自动审查
+    - cron: '0 2 * * *'
+
+jobs:
+  typescript-review:
+    name: TypeScript Code Review
+    runs-on: ubuntu-latest
+    
+    # 只在TypeScript文件变更时运行
+    if: |
+      contains(github.event.head_commit.message, '[skip-review]') == false &&
+      (github.event_name == 'schedule' || 
+       contains(github.event.head_commit.message, '[typescript-review]') ||
+       contains(github.event.head_commit.message, '[review-all]') ||
+       github.event.pull_request ||
+       contains(join(github.event.commits.*.added), '.ts') ||
+       contains(join(github.event.commits.*.modified), '.ts') ||
+       contains(join(github.event.commits.*.added), '.tsx') ||
+       contains(join(github.event.commits.*.modified), '.tsx'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: lims-web-ui/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd lims-web-ui
+        npm ci
+
+    - name: Run TypeScript Reviewer
+      id: review
+      run: |
+        echo "🔍 开始TypeScript代码审查..."
+        node scripts/typescript-reviewer.mjs --strict
+        
+        # 检查退出码
+        if [ $? -eq 0 ]; then
+          echo "✅ TypeScript审查通过"
+          echo "result=success" >> $GITHUB_OUTPUT
+        else
+          echo "❌ TypeScript审查失败"
+          echo "result=failure" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload Review Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: typescript-review-report
+        path: docs/runbook/typescript-review-report.md
+        retention-days: 30
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request' && steps.review.outputs.result == 'failure'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const reportPath = 'docs/runbook/typescript-review-report.md';
+          
+          if (fs.existsSync(reportPath)) {
+            const report = fs.readFileSync(reportPath, 'utf8');
+            
+            // 提取关键信息
+            const errorMatch = report.match(/⛔ ERROR: (\d+) 个/);
+            const warnMatch = report.match(/⚠️ WARN: (\d+) 个/);
+            const errorCount = errorMatch ? parseInt(errorMatch[1]) : 0;
+            const warnCount = warnMatch ? parseInt(warnMatch[1]) : 0;
+            
+            const commentBody = `
+## 🚨 TypeScript代码审查失败
+
+**审查结果:**
+- ⛔ ERROR: ${errorCount} 个问题
+- ⚠️ WARN: ${warnCount} 个问题
+
+### 🔧 如何修复
+
+1. **本地修复** (推荐):
+   \`\`\`bash
+   node scripts/typescript-reviewer.mjs
+   \`\`\`
+
+2. **查看详细报告**: 下载 [审查报告](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+3. **跳过审查** (仅限紧急情况):
+   在commit消息中添加 \`[skip-review]\`
+
+### 📋 常见问题
+
+- **接口命名**: 使用 \`I\` 前缀 (如 \`IUserProps\`)
+- **枚举命名**: 使用 \`E\` 前缀 (如 \`EStatus\`)
+- **组件Props**: 必须使用明确的接口类型
+- **错误处理**: 异步函数需要catch错误
+- **列表渲染**: 必须包含key属性
+
+---
+
+*🤖 由 \`typescript-reviewer\` 自动生成*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody
+            });
+          }
+
+    - name: Fail if review failed
+      if: steps.review.outputs.result == 'failure'
+      run: |
+        echo "❌ TypeScript代码审查失败，阻断合并"
+        exit 1
+
+  auto-fix:
+    name: Auto Fix TypeScript Issues
+    runs-on: ubuntu-latest
+    
+    # 只在schedule或手动触发时运行自动修复
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: lims-web-ui/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd lims-web-ui
+        npm ci
+
+    - name: Run Auto Fix
+      run: |
+        echo "🔧 运行TypeScript自动修复..."
+        node scripts/typescript-reviewer.mjs
+
+    - name: Commit and push fixes
+      if: success()
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # 检查是否有变更
+        if git diff --quiet; then
+          echo "✅ 没有需要修复的问题"
+        else
+          git add .
+          git commit -m "chore: auto-fix typescript issues [skip-review]"
+          git push
+          echo "✅ 自动修复已提交"
+        fi
+
+    - name: Upload Fix Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: typescript-auto-fix-report
+        path: docs/runbook/typescript-review-report.md
+        retention-days: 30

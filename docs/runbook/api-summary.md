@@ -1,147 +1,257 @@
-# Material LIMS REST API 摘要
+# API 接口速查表
 
-基础前缀：`/api/v1`。
-认证：`Authorization: Bearer <JWT>`，从 `/auth/azure-ad/callback` 获取。
-返回包：`{code: 200, message, data}`，分页用 `Page<T>` 含 `records / total / size / current`。
-开发模式 Swagger UI：`/swagger-ui.html`。
+> 🤖 此文件由 `scripts/doc-updater.mjs` 自动生成
+> 📅 最后更新：2026-06-24
+> 📦 扫描目录：`lims-web/src/main/java/com/lims/web/controller/`
 
-## 一、认证 Auth
+## 1. Admin
 
-| Method | 路径 | 角色 | 说明 |
-|--------|------|------|------|
-| GET | `/auth/azure-ad/url` | 公开 | 取 Azure AD 登录跳转地址 |
-| POST | `/auth/azure-ad/callback` | 公开 | 用 code 换 JWT |
-| GET | `/auth/me` | 已登录 | 当前用户信息 |
-| POST | `/auth/logout` | 已登录 | 注销 |
-| PUT | `/auth/me/locale` | 已登录 | 设置个人 locale |
+**Base**: `/api/v1/admin`
 
-## 二、基础数据
+> 系统管理
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET / POST | `/brands` | 列表公开 / 写 ADMIN |
-| PUT / DELETE | `/brands/{id}` | ADMIN |
-| GET / POST | `/request-types` | 列表公开 / 写 ADMIN |
-| PUT / DELETE | `/request-types/{id}` | ADMIN |
-| GET / POST | `/departments` | 列表公开 / 写 ADMIN |
-| GET | `/departments/tree` | 公开 |
-| PUT / DELETE | `/departments/{id}` | ADMIN |
-| GET / POST | `/holidays` | 列表公开 / 写 ADMIN |
-| POST | `/holidays/import` | ADMIN |
-| GET | `/holidays/calculate-due-date?startDate=&days=` | 已登录 |
-| GET | `/holidays/is-business-day?date=` | 已登录 |
-| GET | `/holidays/count-business-days?startDate=&endDate=` | 已登录 |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/admin/logs` | List audit logs with filters and user-name join |
+| **GET** | `/api/v1/admin/logs/{id}` | Get audit log detail by id |
+| **GET** | `/api/v1/admin/users` | List users with pagination |
+| **PUT** | `/api/v1/admin/users/{id}/roles` | Update user roles |
+| **PUT** | `/api/v1/admin/users/{id}/toggle-active` | Toggle user active status |
 
-## 三、测试数据
+## 2. Analysis Item Management
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET / POST / PUT / DELETE | `/analysis-items` | 列表公开 / 写 ADMIN |
-| GET | `/analysis-items/cascade` | 公开（含缓存） |
+**Base**: `/api/v1/analysis-items`
 
-## 四、委托与任务
+> 分析项目管理
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET / POST | `/requests` | 已登录 |
-| GET | `/requests/{id}` | 数据权限过滤 |
-| POST | `/requests/{id}/submit` | Requester |
-| POST | `/requests/{id}/assign` | MANAGER |
-| POST | `/requests/{id}/reject` | MANAGER |
-| POST | `/requests/{id}/receive-sample` | TECHNICIAN |
-| POST | `/requests/{id}/start-reporting` | TECHNICIAN |
-| POST | `/requests/{id}/complete` | MANAGER |
-| GET | `/requests/{id}/tasks` | 已登录 |
-| PUT | `/requests/tasks/{taskId}` | ENGINEER |
-| GET | `/requests/{id}/workflow` | 已登录 |
-| GET | `/requests/my-tasks` | 已登录 |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/analysis-items` | Get / |
+| **GET** | `/api/v1/analysis-items/{id}` | Get cascade data for frontend selection |
+| **GET** | `/api/v1/analysis-items/by-group/{groupId}` | Get /by-group/{groupId} |
+| **GET** | `/api/v1/analysis-items/cascade` | Get /cascade |
+| **POST** | `/api/v1/analysis-items` | Post / |
+| **PUT** | `/api/v1/analysis-items/{id}` | Put /{id} |
+| **DEL** | `/api/v1/analysis-items/{id}` | Delete /{id} |
 
-## 五、报告
+## 3. Authentication
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET / POST | `/reports/requests/{requestId}/reports` | ENGINEER 创建 |
-| GET | `/reports/{id}` | 数据权限 |
-| POST | `/reports/{id}/submit` | ENGINEER |
-| POST | `/reports/{id}/approve` | MANAGER |
-| POST | `/reports/{id}/reject` | MANAGER |
-| POST | `/reports/{id}/revise` | ENGINEER |
-| GET | `/reports/{id}/revisions` | 已登录 |
-| GET | `/reports/{id}/edit-url` | ENGINEER |
-| POST | `/reports/{id}/sync` | ENGINEER |
+**Base**: `/api/v1/auth`
 
-## 六、设备与维修
+> SSO认证
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET / POST / PUT / DELETE | `/equipments` | 列表公开 / 写 ADMIN |
-| GET / POST | `/equipment-repairs` | 已登录 / TECHNICIAN+ |
-| PUT | `/equipment-repairs/{id}` | TECHNICIAN+ |
-| POST | `/equipment-repairs/{id}/complete` | TECHNICIAN+ |
-| DELETE | `/equipment-repairs/{id}` | ADMIN |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/auth/azure-ad-login` | Get /azure-ad-login |
+| **GET** | `/api/v1/auth/azure-ad/url` | Get /azure-ad/url |
+| **GET** | `/api/v1/auth/me` | Get /me |
+| **POST** | `/api/v1/auth/azure-ad/callback` | Post /azure-ad/callback |
+| **POST** | `/api/v1/auth/callback` | Post /callback |
+| **POST** | `/api/v1/auth/login` | Post /login |
+| **POST** | `/api/v1/auth/logout` | Post /logout |
+| **PUT** | `/api/v1/auth/me/locale` | Put /me/locale |
+| **PUT** | `/api/v1/auth/password` | Put /password |
 
-## 七、外部数据
+## 4. Brand Management
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET | `/external/parts?keyword=` | 已登录 |
-| GET | `/external/parts/{id}` | 已登录 |
-| GET | `/external/suppliers?keyword=` | 已登录 |
-| GET | `/external/suppliers/{id}` | 已登录 |
+**Base**: `/api/v1/brands`
 
-## 八、仪表盘
+> 品牌管理
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET | `/dashboard/my-tasks?userId=` | 已登录 |
-| GET | `/dashboard/manager-overview` | MANAGER |
-| GET | `/dashboard/request-stats` | MANAGER |
-| GET | `/dashboard/cost-stats?startDate=&endDate=&groupBy=` | MANAGER |
-| GET | `/dashboard/cost-export?...` | MANAGER（返回 xlsx） |
-| GET | `/dashboard/equipment-stats` | 已登录 |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/brands` | List brands with pagination |
+| **GET** | `/api/v1/brands/{id}` | Get brand by ID |
+| **POST** | `/api/v1/brands` | Create brand |
+| **PUT** | `/api/v1/brands/{id}` | Update brand |
+| **DEL** | `/api/v1/brands/{id}` | Delete brand |
 
-## 九、知识库
+## 5. Dashboard
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET | `/knowledge-docs` | 已登录 |
-| GET | `/knowledge-docs/{id}` | 已登录 |
-| POST | `/knowledge-docs` (multipart) | MANAGER+ |
-| PUT | `/knowledge-docs/{id}` | MANAGER+ |
-| DELETE | `/knowledge-docs/{id}` | ADMIN |
+**Base**: `/api/v1/dashboard`
 
-## 十、系统管理
+> 仪表盘
 
-| Method | 路径 | 角色 |
-|--------|------|------|
-| GET | `/admin/users` | ADMIN |
-| PUT | `/admin/users/{id}/roles` | ADMIN |
-| PUT | `/admin/users/{id}/toggle-active` | ADMIN |
-| GET | `/admin/logs?module=&action=&userId=&startDate=&endDate=` | ADMIN |
-| GET | `/admin/logs/{id}` | ADMIN |
-| GET | `/i18n/messages?locale=` | 公开 |
-| POST | `/i18n/messages` | ADMIN |
-| POST | `/i18n/messages/batch?locale=` | ADMIN |
-| DELETE | `/i18n/messages?messageKey=&locale=` | ADMIN |
-| POST | `/sync/users` | ADMIN |
-| POST | `/sync/departments` | ADMIN |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/dashboard/cost-export` | Export cost statistics to xlsx |
+| **GET** | `/api/v1/dashboard/cost-stats` | Cost statistics with multiple grouping dimensions: brand|type|month|item |
+| **GET** | `/api/v1/dashboard/equipment-stats` | Get /equipment-stats |
+| **GET** | `/api/v1/dashboard/manager-overview` | Get /manager-overview |
+| **GET** | `/api/v1/dashboard/my-tasks` | Get /my-tasks |
+| **GET** | `/api/v1/dashboard/request-stats` | Get /request-stats |
 
-## 十一、错误码摘要
+## 6. Department Management
 
-| code | 含义 |
-|------|------|
-| 1001 | 参数校验失败 |
-| 1002 | 数据不存在 |
-| 1003 | 数据已存在 |
-| 1004 | 操作不允许 |
-| 2001 | Request 状态不允许此操作 |
-| 2002 | Report 版本冲突 |
-| 2003 | 已超期 |
-| 2004 | Report 当前状态不可编辑 |
-| 2005 | 必须分配工程师 |
-| 2006 | Revision Note 必填 |
-| 3001 / 3002 / 3003 | 未授权 / 拒绝访问 / Token 过期 |
-| 5001 | 外部 API 不可用（自动降级 mock） |
-| 5002 | 文件转换失败 |
-| 5003 | M365 集成错误 |
-| 5004 | 文件上传失败 |
+**Base**: `/api/v1/departments`
+
+> 部门管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/departments` | Get / |
+| **GET** | `/api/v1/departments/{id}` | Get department tree structure |
+| **GET** | `/api/v1/departments/tree` | Get /tree |
+| **POST** | `/api/v1/departments` | Post / |
+| **PUT** | `/api/v1/departments/{id}` | Put /{id} |
+| **DEL** | `/api/v1/departments/{id}` | Delete /{id} |
+
+## 7. Equipment Repair
+
+**Base**: `/api/v1/equipment-repairs`
+
+> 设备维修管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/equipment-repairs` | Get / |
+| **GET** | `/api/v1/equipment-repairs/{id}` | Get /{id} |
+| **POST** | `/api/v1/equipment-repairs` | Create repair record (auto sets equipment.status=UNDER_REPAIR) |
+| **POST** | `/api/v1/equipment-repairs/{id}/complete` | Mark repair completed; equipment auto restored to ACTIVE if no more pending repairs |
+| **PUT** | `/api/v1/equipment-repairs/{id}` | Put /{id} |
+| **DEL** | `/api/v1/equipment-repairs/{id}` | Delete /{id} |
+
+## 8. Equipment Management
+
+**Base**: `/api/v1/equipments`
+
+> 设备管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/equipments` | Get / |
+| **GET** | `/api/v1/equipments/{id}` | Get /{id} |
+| **POST** | `/api/v1/equipments` | Post / |
+| **PUT** | `/api/v1/equipments/{id}` | Put /{id} |
+| **DEL** | `/api/v1/equipments/{id}` | Delete /{id} |
+| **PATCH** | `/api/v1/equipments/{id}/status` | Patch /{id}/status |
+
+## 9. External Integration
+
+**Base**: `/api/v1/external`
+
+> 外部系统集成
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/external/parts` | Search parts from master data system |
+| **GET** | `/api/v1/external/parts/{partNumber}` | Get part detail by partNumber |
+| **GET** | `/api/v1/external/suppliers` | Search suppliers from supplier management system |
+| **GET** | `/api/v1/external/suppliers/{supplierCode}` | Get supplier detail by supplierCode |
+
+## 10. Holiday Management
+
+**Base**: `/api/v1/holidays`
+
+> 节假日管理 / 工作日计算
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/holidays` | Get / |
+| **GET** | `/api/v1/holidays/{id}` | Get /{id} |
+| **GET** | `/api/v1/holidays/calculate-due-date` | Compute due date by skipping holidays/weekends |
+| **GET** | `/api/v1/holidays/count-business-days` | Count business days between [from, to] (inclusive) |
+| **GET** | `/api/v1/holidays/is-business-day` | Check whether the given date is a business day |
+| **POST** | `/api/v1/holidays` | Post / |
+| **POST** | `/api/v1/holidays/import` | Post /import |
+| **PUT** | `/api/v1/holidays/{id}` | Put /{id} |
+| **DEL** | `/api/v1/holidays/{id}` | Delete /{id} |
+
+## 11. i18n
+
+**Base**: `/api/v1/i18n`
+
+> 国际化字典
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/i18n/messages` | Get /messages |
+| **POST** | `/api/v1/i18n/messages` | Post /messages |
+| **POST** | `/api/v1/i18n/messages/batch` | Post /messages/batch |
+| **DEL** | `/api/v1/i18n/messages` | Delete /messages |
+
+## 12. Knowledge Hub
+
+**Base**: `/api/v1/knowledge-docs`
+
+> 知识库文档
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/knowledge-docs` | Get / |
+| **GET** | `/api/v1/knowledge-docs/{id}` | Get /{id} |
+| **POST** | `/api/v1/knowledge-docs` | Upload knowledge document (multipart) |
+| **PUT** | `/api/v1/knowledge-docs/{id}` | Put /{id} |
+| **DEL** | `/api/v1/knowledge-docs/{id}` | Delete /{id} |
+
+## 13. Report Management
+
+**Base**: `/api/v1/reports`
+
+> 报告管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/reports` | Get / |
+| **GET** | `/api/v1/reports/{id}` | Get /{id} |
+| **GET** | `/api/v1/reports/{id}/edit-url` | Get /{id}/edit-url |
+| **GET** | `/api/v1/reports/{id}/revisions` | Get /{id}/revisions |
+| **GET** | `/api/v1/reports/{id}/sample-word` | Get /{id}/sample-word |
+| **POST** | `/api/v1/reports/{id}/approve` | Post /{id}/approve |
+| **POST** | `/api/v1/reports/{id}/reject` | Post /{id}/reject |
+| **POST** | `/api/v1/reports/{id}/revise` | Post /{id}/revise |
+| **POST** | `/api/v1/reports/{id}/submit` | Post /{id}/submit |
+| **POST** | `/api/v1/reports/{id}/sync` | Post /{id}/sync |
+| **POST** | `/api/v1/reports/requests/{requestId}/reports` | Post /requests/{requestId}/reports |
+
+## 14. Request Type Management
+
+**Base**: `/api/v1/request-types`
+
+> 委托类型管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/request-types` | Get / |
+| **GET** | `/api/v1/request-types/{id}` | Get /{id} |
+| **POST** | `/api/v1/request-types` | Post / |
+| **PUT** | `/api/v1/request-types/{id}` | Put /{id} |
+| **DEL** | `/api/v1/request-types/{id}` | Delete /{id} |
+
+## 15. Request Management
+
+**Base**: `/api/v1/requests`
+
+> 委托管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/requests` | List requests with pagination and filters |
+| **GET** | `/api/v1/requests/{id}` | Get request by ID |
+| **GET** | `/api/v1/requests/{id}/tasks` | Get analysis tasks for a request |
+| **GET** | `/api/v1/requests/{id}/workflow` | Get workflow status for a request |
+| **GET** | `/api/v1/requests/my-tasks` | Get my pending workflow tasks |
+| **POST** | `/api/v1/requests` | Create a new request |
+| **POST** | `/api/v1/requests/{id}/assign` | Manager assigns engineers to request |
+| **POST** | `/api/v1/requests/{id}/complete` | Complete request |
+| **POST** | `/api/v1/requests/{id}/receive-sample` | Receive sample for request |
+| **POST** | `/api/v1/requests/{id}/reject` | Manager rejects request |
+| **POST** | `/api/v1/requests/{id}/start-reporting` | Start reporting phase |
+| **POST** | `/api/v1/requests/{id}/submit` | Submit request for review |
+| **PUT** | `/api/v1/requests/tasks/{taskId}` | Update analysis task status |
+
+## 16. Data Sync
+
+**Base**: `/api/v1/sync`
+
+> 数据同步
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/sync/status` | Get /status |
+| **POST** | `/api/v1/sync/departments` | Post /departments |
+| **POST** | `/api/v1/sync/users` | Post /users |
+
+---
+
+📊 **统计**: 16 个 Controller · 104 个端点

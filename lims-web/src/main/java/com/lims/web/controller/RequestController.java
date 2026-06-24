@@ -8,7 +8,9 @@ import com.lims.model.dto.AnalysisTaskAssignDTO;
 import com.lims.model.dto.RequestCreateDTO;
 import com.lims.model.entity.AnalysisTask;
 import com.lims.model.entity.Request;
-import com.lims.service.RequestService;
+import com.lims.service.AnalysisTaskService;
+import com.lims.service.RequestCommandService;
+import com.lims.service.RequestQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,13 +21,25 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 委托管理 Controller —— CQRS 重构后使用三个独立 Service：
+ * <ul>
+ *   <li>{@link RequestCommandService} — 写操作（create/submit/assign/reject/complete）</li>
+ *   <li>{@link RequestQueryService} — 读操作（list/get/workflow）</li>
+ *   <li>{@link AnalysisTaskService} — 任务管理（update/query tasks）</li>
+ * </ul>
+ */
 @Tag(name = "Request Management", description = "委托管理")
 @RestController
 @RequestMapping("/api/v1/requests")
 @RequiredArgsConstructor
 public class RequestController {
 
-    private final RequestService requestService;
+    private final RequestCommandService requestCommandService;
+    private final RequestQueryService requestQueryService;
+    private final AnalysisTaskService analysisTaskService;
+
+    // ---- Query endpoints (read-only) ----
 
     @Operation(summary = "List requests with pagination and filters")
     @GetMapping
@@ -36,7 +50,7 @@ public class RequestController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String brandId,
             @RequestParam(required = false) String keyword) {
-        Page<Request> result = requestService.listRequests(page, size, status, brandId, keyword);
+        Page<Request> result = requestQueryService.listRequests(page, size, status, brandId, keyword);
         return R.ok(result);
     }
 
@@ -44,15 +58,38 @@ public class RequestController {
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public R<Request> getById(@PathVariable String id) {
-        return R.ok(requestService.getRequest(id));
+        return R.ok(requestQueryService.getRequest(id));
     }
+
+    @Operation(summary = "Get analysis tasks for a request")
+    @GetMapping("/{id}/tasks")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<AnalysisTask>> getTasks(@PathVariable String id) {
+        return R.ok(analysisTaskService.getAnalysisTasks(id));
+    }
+
+    @Operation(summary = "Get workflow status for a request")
+    @GetMapping("/{id}/workflow")
+    @PreAuthorize("isAuthenticated()")
+    public R<Map<String, Object>> getWorkflowStatus(@PathVariable String id) {
+        return R.ok(requestQueryService.getWorkflowStatus(id));
+    }
+
+    @Operation(summary = "Get my pending workflow tasks")
+    @GetMapping("/my-tasks")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<Map<String, Object>>> myTasks() {
+        return R.ok(requestQueryService.getMyPendingTasks(SecurityUtils.getCurrentUserId()));
+    }
+
+    // ---- Command endpoints (write) ----
 
     @Operation(summary = "Create a new request")
     @PostMapping
     @PreAuthorize("isAuthenticated()")
     @AuditLog(module = "REQUEST", action = "CREATE")
     public R<Request> create(@Valid @RequestBody RequestCreateDTO dto) {
-        Request request = requestService.createRequest(dto, SecurityUtils.getCurrentUserId());
+        Request request = requestCommandService.createRequest(dto, SecurityUtils.getCurrentUserId());
         return R.ok(request);
     }
 
@@ -61,7 +98,7 @@ public class RequestController {
     @PreAuthorize("isAuthenticated()")
     @AuditLog(module = "REQUEST", action = "SUBMIT")
     public R<Void> submit(@PathVariable String id) {
-        requestService.submitRequest(id, SecurityUtils.getCurrentUserId());
+        requestCommandService.submitRequest(id, SecurityUtils.getCurrentUserId());
         return R.ok();
     }
 
@@ -72,7 +109,7 @@ public class RequestController {
     public R<Void> assign(@PathVariable String id,
                           @RequestBody List<AnalysisTaskAssignDTO> assignments,
                           @RequestParam(required = false) String priority) {
-        requestService.assignRequest(id, assignments, priority);
+        requestCommandService.assignRequest(id, assignments, priority);
         return R.ok();
     }
 
@@ -81,7 +118,7 @@ public class RequestController {
     @PreAuthorize("hasRole('MANAGER')")
     @AuditLog(module = "REQUEST", action = "REJECT")
     public R<Void> reject(@PathVariable String id, @RequestBody Map<String, String> body) {
-        requestService.rejectRequest(id, body.get("reason"));
+        requestCommandService.rejectRequest(id, body.get("reason"));
         return R.ok();
     }
 
@@ -91,7 +128,7 @@ public class RequestController {
     @AuditLog(module = "REQUEST", action = "RECEIVE_SAMPLE")
     public R<Void> receiveSample(@PathVariable String id,
                                   @RequestBody Map<String, String> body) {
-        requestService.receiveSample(id, body.get("deliveryNote"), SecurityUtils.getCurrentUserId());
+        requestCommandService.receiveSample(id, body.get("deliveryNote"), SecurityUtils.getCurrentUserId());
         return R.ok();
     }
 
@@ -100,7 +137,7 @@ public class RequestController {
     @PreAuthorize("hasAnyRole('ENGINEER', 'MANAGER')")
     @AuditLog(module = "REQUEST", action = "START_REPORTING")
     public R<Void> startReporting(@PathVariable String id) {
-        requestService.startReporting(id, SecurityUtils.getCurrentUserId());
+        requestCommandService.startReporting(id, SecurityUtils.getCurrentUserId());
         return R.ok();
     }
 
@@ -109,15 +146,8 @@ public class RequestController {
     @PreAuthorize("hasRole('MANAGER')")
     @AuditLog(module = "REQUEST", action = "COMPLETE")
     public R<Void> complete(@PathVariable String id) {
-        requestService.completeRequest(id);
+        requestCommandService.completeRequest(id);
         return R.ok();
-    }
-
-    @Operation(summary = "Get analysis tasks for a request")
-    @GetMapping("/{id}/tasks")
-    @PreAuthorize("isAuthenticated()")
-    public R<List<AnalysisTask>> getTasks(@PathVariable String id) {
-        return R.ok(requestService.getAnalysisTasks(id));
     }
 
     @Operation(summary = "Update analysis task status")
@@ -126,21 +156,8 @@ public class RequestController {
     @AuditLog(module = "REQUEST", action = "UPDATE_TASK")
     public R<Void> updateTask(@PathVariable String taskId,
                                @RequestBody Map<String, String> body) {
-        requestService.updateAnalysisTask(taskId, body.get("status"), body.get("delayReason"), SecurityUtils.getCurrentUserId());
+        analysisTaskService.updateAnalysisTask(taskId, body.get("status"), body.get("delayReason"),
+                SecurityUtils.getCurrentUserId());
         return R.ok();
-    }
-
-    @Operation(summary = "Get workflow status for a request")
-    @GetMapping("/{id}/workflow")
-    @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> getWorkflowStatus(@PathVariable String id) {
-        return R.ok(requestService.getWorkflowStatus(id));
-    }
-
-    @Operation(summary = "Get my pending workflow tasks")
-    @GetMapping("/my-tasks")
-    @PreAuthorize("isAuthenticated()")
-    public R<List<Map<String, Object>>> myTasks() {
-        return R.ok(requestService.getMyPendingTasks(SecurityUtils.getCurrentUserId()));
     }
 }

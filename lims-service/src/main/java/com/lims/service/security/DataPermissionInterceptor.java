@@ -31,14 +31,20 @@ import java.util.Arrays;
 import java.sql.SQLException;
 
 /**
- * 数据权限拦截器：根据当前用户角色，对涉及 request / report / analysis_task 等核心业务表的查询，
- * 自动追加 WHERE 条件。
+ * 数据权限拦截器：根据当前用户角色，对涉及 request / report / analysis_task / sample
+ * 等核心业务表的查询，自动追加 WHERE 条件，确保用户只能看到与自己相关的数据行。
+ *
+ * 权限映射：
+ *   request       → requester_id = 当前用户（委托发起人只能看自己的委托）
+ *   analysis_task → assignee_id  = 当前用户（工程师只能看分配给自己的任务）
+ *   report        → author_id    = 当前用户（作者只能看自己写的报告）
+ *   sample        → received_by  = 当前用户（技术员只能看自己接收的样品）
  *
  * 注意：基础数据表（brand / department / equipment 等）和 sys_user 不参与过滤。
  *      MANAGER / ADMIN 也不过滤（看全量）。
  *
  * 实现策略：仅当 SQL 是 SELECT 且 from 单表为受控表 + 当前用户为非管理者角色时，注入条件。
- * 复杂 join 查询不在 MVP 拦截范围内（会被忽略并打日志）。
+ * 复杂 join 查询通过正则回退机制处理，回退失败则 fail-soft 放行并打 WARN 日志。
  */
 @Slf4j
 @Component
@@ -101,16 +107,15 @@ public class DataPermissionInterceptor implements InnerInterceptor {
             }
         } catch (Exception e) {
             // Issue #19: fail-soft instead of fail-closed. jsqlparser 4.9
-            // cannot parse JOIN/UNION/CTE/subquery statements, and throwing
-            // here used to break every legitimate complex query for
-            // non-ADMIN/MANAGER users. We now:
+            // cannot parse JOIN/UNION/CTE/subquery statements. We now:
             //   1. try a regex-based fallback that picks the first
             //      "FROM <table>" and adds the outer-row filter
-            //   2. if that also fails, log a WARN and let the original
+            //   2. if regex also fails, log a WARN and let the original
             //      SQL through (fail-soft). ADMIN/MANAGER have early-
             //      returned above so they never reach this catch.
-            log.warn("DataPermission parse failed (jsqlparser); falling back: {}",
-                    e.getMessage());
+            log.warn("[DataPermission] jsqlparser parse failed for user={}, table=unknown. " +
+                    "Falling back to regex. sql={}, error={}",
+                    principal.userId(), originalSql, e.getMessage());
             String outerTable = tryRegexFallback(originalSql);
             if (outerTable != null) {
                 Expression injected = buildPermissionPredicate(outerTable, principal);
@@ -118,14 +123,15 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                     String newSql = injectWhere(originalSql, injected, outerTable);
                     if (newSql != null) {
                         PluginUtils.mpBoundSql(boundSql).sql(newSql);
-                        log.info("DataPermission regex-fallback injected WHERE on {} for user {}",
-                                outerTable, principal.userId());
+                        log.info("[DataPermission] Regex-fallback injected WHERE on table={} " +
+                                "for user={}", outerTable, principal.userId());
                         return;
                     }
                 }
             }
-            log.warn("DataPermission regex-fallback also failed; running original SQL unfiltered. " +
-                    "userId={}, sql={}", principal.userId(), originalSql);
+            log.warn("[DataPermission] Regex-fallback FAILED for user={}. " +
+                    "Running original SQL UNFILTERED (fail-soft). table=unresolved, sql={}",
+                    principal.userId(), originalSql);
         }
     }
 
@@ -140,6 +146,8 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                 return eq("assignee_id", userId);
             case "report":
                 return eq("author_id", userId);
+            case "sample":
+                return eq("received_by", userId);
             default:
                 return null;
         }
@@ -159,19 +167,38 @@ public class DataPermissionInterceptor implements InnerInterceptor {
 
     /**
      * Issue #19: regex-based fallback for queries jsqlparser can't parse
-     * (JOIN/UNION/CTE). Returns the first {@code <word>} token after the
-     * first {@code FROM} keyword, lower-cased and quote-stripped, or null
-     * if no match. Note: this is intentionally conservative — we only
-     * handle the simple {@code FROM <table>} pattern, not
-     * {@code FROM <schema>.<table>} or {@code FROM <table> AS <alias>}.
-     * A more complete parser belongs in a follow-up.
+     * (JOIN/UNION/CTE). Extracts the first table name after FROM, handling
+     * aliases: for {@code FROM request r}, returns {@code request} not
+     * {@code r}. Only returns a name that matches a known controlled table
+     * (request / analysis_task / report / sample); otherwise returns null.
+     *
+     * Strategy: capture all consecutive identifier tokens after FROM, then
+     * pick the first one that matches a controlled table name (case-insensitive).
+     * This handles: FROM request, FROM request r, FROM request AS r, FROM schema.request.
      */
     static String tryRegexFallback(String sql) {
         if (sql == null) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "(?i)\\bfrom\\s+([A-Za-z_][A-Za-z0-9_]*)").matcher(sql);
-        return m.find() ? stripQuotes(m.group(1)).toLowerCase() : null;
+                "(?i)\\bfrom\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\s+(?:as\\s+)?[A-Za-z_][A-Za-z0-9_]*)*)")
+                .matcher(sql);
+        if (!m.find()) return null;
+        // Split the captured group into tokens, clean quotes, check against known tables
+        String[] tokens = m.group(1).split("\\s+");
+        for (String token : tokens) {
+            String cleaned = stripQuotes(token).toLowerCase();
+            if (KNOWN_CONTROLLED_TABLES.contains(cleaned)) {
+                return cleaned;
+            }
+            // Skip alias keywords like "AS"
+        }
+        return null;
     }
+
+    /**
+     * Known controlled tables for data permission filtering.
+     */
+    private static final java.util.Set<String> KNOWN_CONTROLLED_TABLES =
+            java.util.Set.of("request", "analysis_task", "report", "sample");
 
     /**
      * Naive WHERE injector: if the SQL has no {@code WHERE} clause,

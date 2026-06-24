@@ -1,0 +1,173 @@
+// 使用CSS变量替代less变量
+// 移除antd主题导入，使用CSS自定义属性
+
+.modal {
+  // 模态框样式
+  .ant-modal-content {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    
+    .ant-modal-body {
+      padding: 0;
+    }
+  }
+  
+  // 动画效果
+  .ant-modal {
+    animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px 24px;
+  
+  .iconContainer {
+    margin-bottom: 16px;
+    
+    .warningIcon {
+      font-size: 48px;
+      color: @warning-color;
+      animation: pulse 2s infinite;
+      
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+    }
+  }
+  
+  .textContainer {
+    text-align: center;
+    margin-bottom: 24px;
+    
+    .title {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: @heading-color;
+    }
+    
+    .userInfo {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: @text-color-secondary;
+    }
+    
+    .description {
+      display: block;
+      font-size: 14px;
+      line-height: 1.5;
+      color: @text-color-secondary;
+    }
+  }
+  
+  .actions {
+    width: 100%;
+    justify-content: center;
+    
+    .cancelButton {
+      border-radius: 6px;
+      padding: 8px 24px;
+      height: auto;
+      border: 1px solid @border-color-base;
+      
+      &:hover {
+        border-color: @primary-color;
+        color: @primary-color;
+      }
+    }
+    
+    .confirmButton {
+      border-radius: 6px;
+      padding: 8px 24px;
+      height: auto;
+      box-shadow: 0 2px 6px rgba(245, 34, 45, 0.3);
+      
+      &:hover {
+        box-shadow: 0 4px 12px rgba(245, 34, 45, 0.4);
+        transform: translateY(-1px);
+      }
+      
+      &:active {
+        box-shadow: 0 1px 3px rgba(245, 34, 45, 0.3);
+        transform: translateY(0);
+      }
+    }
+  }
+}
+
+// 深色主题支持
+[data-theme='dark'] {
+  .modal {
+    .ant-modal-content {
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+  }
+  
+  .content {
+    .actions {
+      .cancelButton {
+        border-color: @border-color-split;
+        
+        &:hover {
+          border-color: @primary-color;
+        }
+      }
+    }
+  }
+}
+
+// 响应式设计
+@media (max-width: 480px) {
+  .content {
+    padding: 24px 16px 16px;
+    
+    .iconContainer {
+      .warningIcon {
+        font-size: 36px;
+      }
+    }
+    
+    .textContainer {
+      .title {
+        font-size: 16px;
+      }
+      
+      .userInfo,
+      .description {
+        font-size: 13px;
+      }
+    }
+    
+    .actions {
+      flex-direction: column;
+      gap: 8px;
+      
+      .cancelButton,
+      .confirmButton {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  }
+}

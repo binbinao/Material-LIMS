@@ -12,172 +12,150 @@ import {
  * 🔴 高优先级 — 报告管理全流程 E2E 测试
  *
  * 覆盖：创建委托 → 提交 → 分配 → 完成分析 → 出报告 → 提交审批 → 批准 → 修订
+ *
+ * 设计决策：所有步骤（含前置准备和清理）合并为一个 test，
+ * 消除跨 test 共享变量（requestId / reportId）的竞态和调试成本。
  */
 test.describe('Report Lifecycle — 报告全流程', () => {
-  let requestId: string;
-  let reportId: string;
+  test('全流程 — 准备委托 → 创建报告 → 审批 → 修订 → 清理', async ({ api, engineerApi, managerApi }) => {
+    // ================================================================
+    // 0. 拉取基础数据
+    // ================================================================
+    const [brandsRes, typesRes, deptsRes, itemsRes] = await Promise.all([
+      api.get(`${API_PREFIX}/brands`),
+      api.get(`${API_PREFIX}/request-types`),
+      api.get(`${API_PREFIX}/departments`),
+      api.get(`${API_PREFIX}/analysis-items?page=1&size=5`),
+    ]);
 
-  // -------------------------------------------------------
-  // 前置：创建并推进委托到可出报告状态
-  // -------------------------------------------------------
-  test('前置 — 准备委托数据', async ({ api }) => {
-    // 拉取基础数据
-    const brandsRes = await api.get(`${API_PREFIX}/brands`);
-    await assertOk(brandsRes, 'get brands');
     const brands = await getData<{ records: { id: string }[] }>(brandsRes);
-    const brandId = brands?.records?.[0]?.id ?? null;
-
-    const typesRes = await api.get(`${API_PREFIX}/request-types`);
-    await assertOk(typesRes, 'get request types');
     const types = await getData<{ records: { id: string }[] }>(typesRes);
-    const typeId = types?.records?.[0]?.id ?? null;
-
-    const deptsRes = await api.get(`${API_PREFIX}/departments`);
-    await assertOk(deptsRes, 'get departments');
     const depts = await getData<{ id: string }[]>(deptsRes);
-    const deptId = depts?.[0]?.id ?? null;
-
-    // 获取分析项
-    const itemsRes = await api.get(`${API_PREFIX}/analysis-items?page=1&size=5`);
-    await assertOk(itemsRes, 'get analysis items');
     const items = await getData<{ records: { id: string }[] }>(itemsRes);
-    const itemIds = items?.records?.slice(0, 2).map((i: { id: string }) => i.id) ?? [];
 
-    // 创建委托
-    const createRes = await api.post(`${API_PREFIX}/requests`, {
+    const brandId = brands?.records?.[0]?.id ?? null;
+    const typeId = types?.records?.[0]?.id ?? null;
+    const deptId = depts?.[0]?.id ?? null;
+    const itemIds = items?.records?.slice(0, 2).map(i => i.id) ?? [];
+
+    // ================================================================
+    // 前置：创建委托并推进到可出报告状态（用全能 dev 用户）
+    // ================================================================
+    const timestamp = Date.now();
+    const createReqRes = await api.post(`${API_PREFIX}/requests`, {
       data: {
         brandId, deptId, typeId,
-        partNumber: `E2E-RPT-${Date.now()}`,
+        partNumber: `E2E-RPT-${timestamp}`,
         partName: 'E2E 报告测试零件',
         requestReason: 'E2E 自动化 — 报告流程测试',
         priority: 'NORMAL',
         analysisItemIds: itemIds,
       },
     });
-    const created = await getData<RequestEntity>(createRes);
-    requestId = created.id;
+    const created = await getData<RequestEntity>(createReqRes);
+    const requestId = created.id;
     console.log(`  ✅ 委托已创建: ${created.requestNo}`);
 
-    // 提交
-    await api.post(`${API_PREFIX}/requests/${requestId}/submit`);
+    await assertOk(
+      await api.post(`${API_PREFIX}/requests/${requestId}/submit`),
+      '前置: submit request'
+    );
 
-    // 获取任务并分配
     const tasksRes = await api.get(`${API_PREFIX}/requests/${requestId}/tasks`);
     const tasks = await getData<AnalysisTaskEntity[]>(tasksRes);
-    const assignments = tasks.map((t) => ({ taskId: t.id, engineerId: 'dev-user-0001' }));
+    const assignments = tasks.map(t => ({ taskId: t.id, engineerId: 'dev-user-0001' }));
     await api.post(`${API_PREFIX}/requests/${requestId}/assign`, { data: assignments });
 
-    // 接收样品
     await api.post(`${API_PREFIX}/requests/${requestId}/receive-sample`, {
       data: { deliveryNote: 'E2E-RPT-DN-001' },
     });
 
-    // 完成所有分析任务
     for (const task of tasks) {
       await api.put(`${API_PREFIX}/requests/tasks/${task.id}`, { data: { status: 'IN_PROGRESS' } });
       await api.put(`${API_PREFIX}/requests/tasks/${task.id}`, { data: { status: 'COMPLETED' } });
     }
 
-    // 推进到 REPORTING
-    const startRes = await api.post(`${API_PREFIX}/requests/${requestId}/start-reporting`);
-    // 可能已经是 APPROVING（自动跳转），不影响后续测试
-    const statusCode = startRes.status();
-    expect([200, 400]).toContain(statusCode);
+    const startStatus = (await api.post(`${API_PREFIX}/requests/${requestId}/start-reporting`)).status();
+    expect([200, 400]).toContain(startStatus);
+    console.log('  ✅ 前置: 委托已准备就绪');
 
-    console.log('  ✅ 委托已准备就绪，可开始出报告');
-  });
+    // ================================================================
+    // Step 1: 创建报告 — 用 ENGINEER 身份（author = user-engineer-001）
+    // ================================================================
+    const reportRes = await engineerApi.post(`${API_PREFIX}/reports/requests/${requestId}/reports`);
+    await assertOk(reportRes, 'Step 1: create report');
 
-  // -------------------------------------------------------
-  // Step 1: 创建报告
-  // -------------------------------------------------------
-  test('Step 1 — 创建报告 (DRAFT)', async ({ api }) => {
-    test.skip(!requestId, '依赖前置：无 requestId');
-
-    const res = await api.post(`${API_PREFIX}/reports/requests/${requestId}/reports`);
-    await assertOk(res, 'create report');
-
-    const report = await getData<ReportEntity>(res);
-    reportId = report.id;
-
+    const report = await getData<ReportEntity>(reportRes);
+    const reportId = report.id;
     expect(report.status).toBe('DRAFT');
     expect(report.versionNumber).toBe('V1.0');
     expect(report.requestId).toBe(requestId);
+    console.log(`  ✅ Step 1: 报告已创建 [author=engineer]`);
 
-    console.log(`  ✅ 报告已创建: ${reportId}`);
-  });
+    // ================================================================
+    // Step 2: 提交审批 — ENGINEER 提交 (DRAFT → IN_REVIEW)
+    // ================================================================
+    await assertOk(
+      await engineerApi.post(`${API_PREFIX}/reports/${reportId}/submit`),
+      'Step 2: submit report'
+    );
+    const inReview = await getData<ReportEntity>(
+      await api.get(`${API_PREFIX}/reports/${reportId}`)
+    );
+    expect(inReview.status).toBe('IN_REVIEW');
+    console.log('  ✅ Step 2: 报告已提交审批');
 
-  // -------------------------------------------------------
-  // Step 2: 提交报告审批
-  // -------------------------------------------------------
-  test('Step 2 — 提交审批 (DRAFT → IN_REVIEW)', async ({ api }) => {
-    test.skip(!reportId, '依赖 Step 1：无 reportId');
+    // ================================================================
+    // Step 3: 批准报告 — MANAGER 审批 (IN_REVIEW → APPROVED)
+    // 四眼原则：manager ≠ engineer，满足 authorId ≠ approverId
+    // ================================================================
+    await assertOk(
+      await managerApi.post(`${API_PREFIX}/reports/${reportId}/approve`),
+      'Step 3: approve report'
+    );
+    const approved = await getData<ReportEntity>(
+      await api.get(`${API_PREFIX}/reports/${reportId}`)
+    );
+    expect(approved.status).toBe('APPROVED');
+    expect(approved.approvedBy).toBeTruthy();
+    console.log('  ✅ Step 3: 报告已批准 [approver=manager]');
 
-    const res = await api.post(`${API_PREFIX}/reports/${reportId}/submit`);
-    await assertOk(res, 'submit report');
+    // ================================================================
+    // Step 4: 打回 → 修订 (APPROVED → REVISING → V2.0)
+    // ================================================================
+    // 4a. MANAGER 打回
+    await assertOk(
+      await managerApi.post(`${API_PREFIX}/reports/${reportId}/reject`),
+      'Step 4a: reject report'
+    );
+    let current = await getData<ReportEntity>(
+      await api.get(`${API_PREFIX}/reports/${reportId}`)
+    );
+    expect(current.status).toBe('REVISING');
 
-    const getRes = await api.get(`${API_PREFIX}/reports/${reportId}`);
-    const report = await getData<ReportEntity>(getRes);
-    expect(report.status).toBe('IN_REVIEW');
+    // 4b. ENGINEER 重新提交 + MANAGER 批准
+    await engineerApi.post(`${API_PREFIX}/reports/${reportId}/submit`);
+    await managerApi.post(`${API_PREFIX}/reports/${reportId}/approve`);
 
-    console.log('  ✅ 报告已提交审批');
-  });
+    // 4c. ENGINEER 修订（APPROVED 状态下触发版本升级）
+    await assertOk(
+      await engineerApi.post(`${API_PREFIX}/reports/${reportId}/revise`, {
+        data: { revisionNote: 'E2E 修订测试 — 更新实验数据' },
+      }),
+      'Step 4c: revise report'
+    );
+    current = await getData<ReportEntity>(
+      await api.get(`${API_PREFIX}/reports/${reportId}`)
+    );
+    expect(current.versionNumber).toBe('V2.0');
+    expect(current.revisionNote).toBe('E2E 修订测试 — 更新实验数据');
+    expect(current.status).toBe('REVISING');
+    console.log(`  ✅ Step 4: 报告已修订 [${current.versionNumber}]`);
 
-  // -------------------------------------------------------
-  // Step 3: 批准报告
-  // -------------------------------------------------------
-  test('Step 3 — 批准报告 (IN_REVIEW → APPROVED)', async ({ api }) => {
-    test.skip(!reportId, '依赖 Step 1-2：无 reportId');
-
-    const res = await api.post(`${API_PREFIX}/reports/${reportId}/approve`);
-    await assertOk(res, 'approve report');
-
-    const getRes = await api.get(`${API_PREFIX}/reports/${reportId}`);
-    const report = await getData<ReportEntity>(getRes);
-    expect(report.status).toBe('APPROVED');
-    expect(report.approvedBy).toBeTruthy();
-
-    console.log('  ✅ 报告已批准');
-  });
-
-  // -------------------------------------------------------
-  // Step 4: 打回修订
-  // -------------------------------------------------------
-  test('Step 4 — 打回修订 (APPROVED → REVISING)', async ({ api }) => {
-    test.skip(!reportId, '依赖 Step 1-2：无 reportId');
-
-    // 先打回
-    const rejectRes = await api.post(`${API_PREFIX}/reports/${reportId}/reject`);
-    await assertOk(rejectRes, 'reject report');
-
-    let getRes = await api.get(`${API_PREFIX}/reports/${reportId}`);
-    let report = await getData<ReportEntity>(getRes);
-    expect(report.status).toBe('REVISING');
-
-    // 重新提交
-    await api.post(`${API_PREFIX}/reports/${reportId}/submit`);
-    await api.post(`${API_PREFIX}/reports/${reportId}/approve`);
-
-    // 修订（APPROVED 状态下）
-    const reviseRes = await api.post(`${API_PREFIX}/reports/${reportId}/revise`, {
-      data: { revisionNote: 'E2E 修订测试 — 更新实验数据' },
-    });
-    await assertOk(reviseRes, 'revise report');
-
-    getRes = await api.get(`${API_PREFIX}/reports/${reportId}`);
-    report = await getData<ReportEntity>(getRes);
-    expect(report.versionNumber).toBe('V2.0');
-    expect(report.revisionNote).toBe('E2E 修订测试 — 更新实验数据');
-    expect(report.status).toBe('REVISING');
-
-    console.log(`  ✅ 报告已修订: ${report.versionNumber}`);
-  });
-
-  // -------------------------------------------------------
-  // 清理：完成委托
-  // -------------------------------------------------------
-  test('清理 — 完成委托', async ({ api }) => {
-    test.skip(!requestId, '无 requestId');
+    // ================================================================
+    // 清理：完成委托
+    // ================================================================
     await api.post(`${API_PREFIX}/requests/${requestId}/complete`);
-    console.log('  🧹 委托已完成，测试数据清理完毕');
+    console.log('  🧹 清理: 委托已完成');
   });
 });

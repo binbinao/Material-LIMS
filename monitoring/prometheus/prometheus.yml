@@ -1,0 +1,51 @@
+# Prometheus 监控配置 - Material LIMS
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# 告警规则文件
+rule_files:
+  - "alert_rules.yml"
+
+# 抓取配置
+scrape_configs:
+  # Prometheus自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter - 主机监控
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Spring Boot应用监控
+  - job_name: 'lims-backend'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['lims-backend:8080']
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # PostgreSQL数据库监控
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Redis监控
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+# 远程写入配置（可选）
+remote_write:
+  - url: "http://alertmanager:9093/api/v1/alerts"
+
+# 远程读取配置（可选）
+remote_read:
+  - url: "http://alertmanager:9093/api/v1/alerts"

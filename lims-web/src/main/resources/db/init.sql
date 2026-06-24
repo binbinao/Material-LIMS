@@ -19,7 +19,7 @@ CREATE TABLE request_note (
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE department (
-    id VARCHAR(36) PRIMARY KEY, name VARCHAR(200) NOT NULL, parent_id VARCHAR(36) REFERENCES department(id), external_id VARCHAR(100), level INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0,
+    id VARCHAR(36) PRIMARY KEY, name VARCHAR(200) NOT NULL, parent_id VARCHAR(36), external_id VARCHAR(100), level INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE knowledge_doc (
@@ -35,11 +35,11 @@ CREATE TABLE test_site (
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE analysis_type (
-    id VARCHAR(36) PRIMARY KEY, group_id VARCHAR(36) NOT NULL REFERENCES test_group(id), name VARCHAR(200) NOT NULL, description TEXT, sort_order INTEGER DEFAULT 0,
+    id VARCHAR(36) PRIMARY KEY, group_id VARCHAR(36) NOT NULL, name VARCHAR(200) NOT NULL, description TEXT, sort_order INTEGER DEFAULT 0,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE specification (
-    id VARCHAR(36) PRIMARY KEY, group_id VARCHAR(36) REFERENCES test_group(id), name VARCHAR(200) NOT NULL, unit VARCHAR(50), description TEXT, sort_order INTEGER DEFAULT 0,
+    id VARCHAR(36) PRIMARY KEY, group_id VARCHAR(36), name VARCHAR(200) NOT NULL, unit VARCHAR(50), description TEXT, sort_order INTEGER DEFAULT 0,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE equipment (
@@ -49,19 +49,19 @@ CREATE TABLE equipment (
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE analysis_item (
-    id VARCHAR(36) PRIMARY KEY, group_id VARCHAR(36) NOT NULL REFERENCES test_group(id), site_id VARCHAR(36) REFERENCES test_site(id), type_id VARCHAR(36) NOT NULL REFERENCES analysis_type(id),
-    name VARCHAR(200) NOT NULL, equipment_id VARCHAR(36) REFERENCES equipment(id), test_standards VARCHAR(500), specification_id VARCHAR(36) REFERENCES specification(id),
+    id VARCHAR(36) PRIMARY KEY, group_id VARCHAR(36) NOT NULL, site_id VARCHAR(36), type_id VARCHAR(36) NOT NULL,
+    name VARCHAR(200) NOT NULL, equipment_id VARCHAR(36), test_standards VARCHAR(500), specification_id VARCHAR(36),
     cost DECIMAL(12,2), unit_price DECIMAL(12,2), unit VARCHAR(50), description TEXT, attachment_url VARCHAR(1000), is_active BOOLEAN DEFAULT TRUE, sort_order INTEGER DEFAULT 0,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE sys_user (
     id VARCHAR(36) PRIMARY KEY, email VARCHAR(200) NOT NULL UNIQUE, display_name VARCHAR(200) NOT NULL, login_id VARCHAR(200),
-    dept_id VARCHAR(36) REFERENCES department(id), roles VARCHAR(100) DEFAULT 'REQUESTER', external_id VARCHAR(200), is_active BOOLEAN DEFAULT TRUE, last_login_at TIMESTAMP,
+    dept_id VARCHAR(36), roles VARCHAR(100) DEFAULT 'REQUESTER', external_id VARCHAR(200), is_active BOOLEAN DEFAULT TRUE, last_login_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE request (
-    id VARCHAR(36) PRIMARY KEY, request_no VARCHAR(50) NOT NULL UNIQUE, brand_id VARCHAR(36) NOT NULL REFERENCES brand(id), dept_id VARCHAR(36) REFERENCES department(id),
-    type_id VARCHAR(36) NOT NULL REFERENCES request_type(id), requester_id VARCHAR(36) NOT NULL REFERENCES sys_user(id), proxy_requester_id VARCHAR(36) REFERENCES sys_user(id),
+    id VARCHAR(36) PRIMARY KEY, request_no VARCHAR(50) NOT NULL UNIQUE, brand_id VARCHAR(36) NOT NULL, dept_id VARCHAR(36),
+    type_id VARCHAR(36) NOT NULL, requester_id VARCHAR(36) NOT NULL, proxy_requester_id VARCHAR(36),
     real_requester_name VARCHAR(200), part_number VARCHAR(200), part_name VARCHAR(500), eco VARCHAR(200), supplier_code VARCHAR(200), supplier_name VARCHAR(500),
     request_reason TEXT NOT NULL, priority VARCHAR(20) NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SUBMITTED', 'ASSIGNED', 'SAMPLING', 'REPORTING', 'APPROVING', 'COMPLETED', 'REJECTED')),
@@ -69,36 +69,36 @@ CREATE TABLE request (
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE analysis_task (
-    id VARCHAR(36) PRIMARY KEY, request_id VARCHAR(36) NOT NULL REFERENCES request(id), item_id VARCHAR(36) NOT NULL REFERENCES analysis_item(id),
-    assignee_id VARCHAR(36) REFERENCES sys_user(id), status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'DELAYED', 'COMPLETED')),
+    id VARCHAR(36) PRIMARY KEY, request_id VARCHAR(36) NOT NULL, item_id VARCHAR(36) NOT NULL,
+    assignee_id VARCHAR(36), status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'DELAYED', 'COMPLETED')),
     delay_reason TEXT, started_at TIMESTAMP, completed_at TIMESTAMP, sort_order INTEGER DEFAULT 0,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE sample (
-    id VARCHAR(36) PRIMARY KEY, request_id VARCHAR(36) NOT NULL REFERENCES request(id), received_by VARCHAR(36) REFERENCES sys_user(id), received_at TIMESTAMP,
+    id VARCHAR(36) PRIMARY KEY, request_id VARCHAR(36) NOT NULL, received_by VARCHAR(36), received_at TIMESTAMP,
     preparation_status VARCHAR(20) DEFAULT 'PENDING' CHECK (preparation_status IN ('PENDING', 'PREPARING', 'READY')), preparation_detail TEXT, completed_at TIMESTAMP,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE report (
-    id VARCHAR(36) PRIMARY KEY, request_id VARCHAR(36) NOT NULL REFERENCES request(id), task_id VARCHAR(36) REFERENCES analysis_task(id),
-    author_id VARCHAR(36) NOT NULL REFERENCES sys_user(id), version_number VARCHAR(20) NOT NULL DEFAULT 'V1.0', revision_note TEXT,
+    id VARCHAR(36) PRIMARY KEY, request_id VARCHAR(36) NOT NULL, task_id VARCHAR(36),
+    author_id VARCHAR(36) NOT NULL, version_number VARCHAR(20) NOT NULL DEFAULT 'V1.0', revision_note TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'IN_REVIEW', 'APPROVED', 'REVISING')),
     file_url VARCHAR(1000), pdf_url VARCHAR(1000), sharepoint_file_id VARCHAR(200), sharepoint_edit_url VARCHAR(1000),
-    approved_by VARCHAR(36) REFERENCES sys_user(id), approved_at TIMESTAMP, submitted_at TIMESTAMP,
+    approved_by VARCHAR(36), approved_at TIMESTAMP, submitted_at TIMESTAMP,
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ, version INTEGER DEFAULT 0
 );
 CREATE TABLE report_revision (
-    id VARCHAR(36) PRIMARY KEY, report_id VARCHAR(36) NOT NULL REFERENCES report(id), version_number VARCHAR(20) NOT NULL,
+    id VARCHAR(36) PRIMARY KEY, report_id VARCHAR(36) NOT NULL, version_number VARCHAR(20) NOT NULL,
     revision_note TEXT, file_url VARCHAR(1000), pdf_url VARCHAR(1000), archived_by VARCHAR(36), archived_at TIMESTAMP DEFAULT NOW(), created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE equipment_repair (
-    id VARCHAR(36) PRIMARY KEY, equipment_id VARCHAR(36) NOT NULL REFERENCES equipment(id), report_date DATE NOT NULL,
+    id VARCHAR(36) PRIMARY KEY, equipment_id VARCHAR(36) NOT NULL, report_date DATE NOT NULL,
     fault_description TEXT NOT NULL, repair_action TEXT, repair_cost DECIMAL(12,2), repaired_by VARCHAR(200), completion_date DATE,
     status VARCHAR(20) NOT NULL DEFAULT 'REPORTING' CHECK (status IN ('REPORTING', 'REPAIRING', 'COMPLETED')),
     created_by VARCHAR(36), updated_by VARCHAR(36), created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW(), deleted_at TIMESTAMP, version INTEGER DEFAULT 0
 );
 CREATE TABLE sys_operation_log (
-    id VARCHAR(36) PRIMARY KEY, user_id VARCHAR(36) REFERENCES sys_user(id), module VARCHAR(50) NOT NULL, action VARCHAR(20) NOT NULL,
+    id VARCHAR(36) PRIMARY KEY, user_id VARCHAR(36), module VARCHAR(50) NOT NULL, action VARCHAR(20) NOT NULL,
     entity_id VARCHAR(100), detail TEXT, ip VARCHAR(50), created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE sys_i18n_message (

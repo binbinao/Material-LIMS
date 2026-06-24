@@ -1,0 +1,110 @@
+groups:
+  - name: database_alerts
+    rules:
+      # 数据库连接池告警
+      - alert: DatabaseConnectionPoolHighUsage
+        expr: spring_datasource_hikari_active_connections / spring_datasource_hikari_maximum_pool_size > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库连接池使用率过高"
+          description: "数据库连接池使用率已达到 {{ $value | humanizePercentage }}，建议检查数据库性能或增加连接池大小"
+
+      - alert: DatabaseConnectionLeakDetected
+        expr: increase(spring_datasource_hikari_leak_detection_counter_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "检测到数据库连接泄漏"
+          description: "在最近5分钟内检测到 {{ $value }} 次连接泄漏，请立即检查应用代码"
+
+      # 数据库性能告警
+      - alert: HighDatabaseQueryLatency
+        expr: rate(pg_stat_statements_mean_time_seconds[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库查询延迟过高"
+          description: "数据库查询平均延迟超过500ms，当前值为 {{ $value | humanizeDuration }}"
+
+      - alert: DatabaseDeadlockDetected
+        expr: pg_stat_database_deadlocks > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "检测到数据库死锁"
+          description: "数据库发生死锁，当前死锁计数: {{ $value }}"
+
+  - name: application_alerts
+    rules:
+      # 应用错误率告警
+      - alert: HighErrorRate
+        expr: rate(http_server_requests_seconds_count{status=~"5.."}[5m]) / rate(http_server_requests_seconds_count[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用错误率过高"
+          description: "HTTP 5xx错误率超过5%，当前值为 {{ $value | humanizePercentage }}"
+
+      - alert: ServiceUnavailable
+        expr: up{job="lims-backend"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "应用服务不可用"
+          description: "LIMS后端服务已停止响应"
+
+      # 内存和GC告警
+      - alert: HighMemoryUsage
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.85
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM堆内存使用率过高"
+          description: "JVM堆内存使用率达到 {{ $value | humanizePercentage }}"
+
+      - alert: FrequentGarbageCollection
+        expr: rate(jvm_gc_pause_seconds_count[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "垃圾回收过于频繁"
+          description: "GC频率过高，5分钟内发生 {{ $value }} 次GC"
+
+  - name: infrastructure_alerts
+    rules:
+      # 主机资源告警
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU使用率过高"
+          description: "CPU使用率超过80%，当前值为 {{ $value | humanizePercentage }}"
+
+      - alert: HighMemoryUsageHost
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "主机内存使用率过高"
+          description: "主机内存使用率超过90%，当前值为 {{ $value | humanizePercentage }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "磁盘空间不足"
+          description: "磁盘使用率超过85%，当前值为 {{ $value | humanizePercentage }}"

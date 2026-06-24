@@ -137,7 +137,7 @@ declare namespace API {
     active?: boolean;
   }
 
-  interface SysUser {
+  interface ISysUser {
     id: string;
     email: string;
     displayName: string;
@@ -149,7 +149,7 @@ declare namespace API {
     lastLoginAt?: string;
   }
 
-  interface PageResult<T> {
+  interface IPageResult<T> {
     records: T[];
     total: number;
     size: number;

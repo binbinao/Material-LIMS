@@ -1,0 +1,239 @@
+# Material LIMS 告警规则配置
+
+groups:
+  # 应用可用性告警组
+  - name: lims_availability
+    rules:
+      # 应用宕机告警
+      - alert: LIMSApplicationDown
+        expr: up{job="lims-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: lims-backend
+        annotations:
+          summary: "LIMS应用实例宕机"
+          description: "LIMS后端应用 {{ $labels.instance }} 已宕机超过1分钟"
+          runbook_url: "https://github.com/your-org/material-lims/docs/runbook/deployment.md#故障排查"
+
+      # 健康检查失败告警
+      - alert: LIMSHealthCheckFailed
+        expr: spring_health_status{job="lims-backend"} != 1
+        for: 2m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "LIMS健康检查失败"
+          description: "LIMS应用健康检查失败，状态: {{ $value }}"
+
+  # 性能告警组
+  - name: lims_performance
+    rules:
+      # HTTP错误率过高
+      - alert: LIMSHighErrorRate
+        expr: sum(rate(http_server_requests_seconds_count{job="lims-backend", status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count{job="lims-backend"}[5m])) * 100 > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "LIMS HTTP错误率过高"
+          description: "LIMS应用5xx错误率超过1%，当前值: {{ $value }}%"
+
+      # 响应时间过长
+      - alert: LIMSResponseTimeHigh
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{job="lims-backend"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "LIMS响应时间过长"
+          description: "LIMS应用P95响应时间超过2秒，当前值: {{ $value }}秒"
+
+      # 数据库连接池使用率过高
+      - alert: LIMSDBConnectionPoolHigh
+        expr: hikaricp_connections_active{job="lims-backend"} / hikaricp_connections_max{job="lims-backend"} * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "数据库连接池使用率过高"
+          description: "数据库连接池使用率超过80%，当前值: {{ $value }}%"
+
+  # 数据库告警组
+  - name: database_alerts
+    rules:
+      # PostgreSQL连接失败
+      - alert: PostgresConnectionFailed
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: "PostgreSQL数据库连接失败"
+          description: "PostgreSQL数据库无法连接"
+
+      # 数据库锁等待过多
+      - alert: PostgresLockWaitHigh
+        expr: pg_stat_activity_waiting > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "PostgreSQL锁等待过多"
+          description: "PostgreSQL锁等待连接数超过10个，当前值: {{ $value }}"
+
+      # 数据库连接数过多
+      - alert: PostgresConnectionsHigh
+        expr: pg_stat_activity_count > 50
+        for: 2m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "PostgreSQL连接数过多"
+          description: "PostgreSQL活动连接数超过50个，当前值: {{ $value }}"
+
+  # Redis缓存告警组
+  - name: redis_alerts
+    rules:
+      # Redis连接失败
+      - alert: RedisConnectionFailed
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis连接失败"
+          description: "Redis缓存服务无法连接"
+
+      # Redis内存使用率过高
+      - alert: RedisMemoryUsageHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis内存使用率过高"
+          description: "Redis内存使用率超过85%，当前值: {{ $value }}%"
+
+      # Redis缓存命中率过低
+      - alert: RedisCacheHitRateLow
+        expr: redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100 < 80
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis缓存命中率过低"
+          description: "Redis缓存命中率低于80%，当前值: {{ $value }}%"
+
+  # 系统资源告警组
+  - name: system_alerts
+    rules:
+      # JVM内存使用率过高
+      - alert: JVMMemoryUsageHigh
+        expr: jvm_memory_used_bytes{area="heap", job="lims-backend"} / jvm_memory_max_bytes{area="heap", job="lims-backend"} * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "JVM堆内存使用率过高"
+          description: "JVM堆内存使用率超过85%，当前值: {{ $value }}%"
+
+      # CPU使用率过高
+      - alert: CPUUsageHigh
+        expr: process_cpu_usage{job="lims-backend"} > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "应用CPU使用率过高"
+          description: "应用CPU使用率超过80%，当前值: {{ $value }}%"
+
+      # 磁盘空间不足
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100) < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "磁盘空间不足"
+          description: "根分区磁盘可用空间低于10%，当前值: {{ $value }}%"
+
+  # MinIO存储告警组
+  - name: minio_alerts
+    rules:
+      # MinIO服务不可用
+      - alert: MinIOServiceDown
+        expr: minio_cluster_health_status != 1
+        for: 2m
+        labels:
+          severity: critical
+          service: minio
+        annotations:
+          summary: "MinIO存储服务不可用"
+          description: "MinIO存储服务健康状态异常"
+
+      # MinIO存储空间不足
+      - alert: MinIODiskSpaceLow
+        expr: minio_cluster_capacity_usable_free_bytes / minio_cluster_capacity_usable_total_bytes * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          service: minio
+        annotations:
+          summary: "MinIO存储空间不足"
+          description: "MinIO可用存储空间低于15%，当前值: {{ $value }}%"
+
+  # 业务指标告警组
+  - name: business_alerts
+    rules:
+      # 用户活跃度异常
+      - alert: UserActivityAnomaly
+        expr: 
+          avg_over_time(user_sessions_active[1h]) < 
+          avg_over_time(user_sessions_active[1h] offset 1d) * 0.5
+        for: 1h
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "用户活跃度异常下降"
+          description: "当前用户活跃度相比昨日同期下降超过50%"
+
+      # API调用频率异常
+      - alert: APICallRateAnomaly
+        expr: 
+          rate(http_server_requests_seconds_count{job="lims-backend"}[5m]) > 
+          rate(http_server_requests_seconds_count{job="lims-backend"}[5m] offset 1d) * 2
+        for: 10m
+        labels:
+          severity: warning
+          service: lims-backend
+        annotations:
+          summary: "API调用频率异常升高"
+          description: "API调用频率相比昨日同期增长超过100%"
+
+# 告警路由配置（在Alertmanager中配置）
+# route:
+#   group_by: ['alertname', 'service']
+#   group_wait: 10s
+#   group_interval: 10s
+#   repeat_interval: 1h
+#   receiver: 'web.hook'
+# 
+# receivers:
+# - name: 'web.hook'
+#   webhook_configs:
+#   - url: 'http://127.0.0.1:5001/'

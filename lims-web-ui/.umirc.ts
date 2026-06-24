@@ -1,7 +1,5 @@
 import { defineConfig } from '@umijs/max';
-import React from 'react';
 import routes from './config/routes';
-import UserMenu from './src/components/UserMenu';
 
 export default defineConfig({
   antd: {},
@@ -10,16 +8,8 @@ export default defineConfig({
   initialState: {},
   locale: {},
   request: {},
-  layout: {
-    title: 'Material LIMS',
-    locale: true,
-    actionsRender: (props: any) => [
-      React.createElement(UserMenu, {
-        key: 'user-menu',
-        initialState: props?.initialState,
-      }),
-    ],
-  },
+  // 移除layout配置，使用自定义布局组件
+  // layout: false,
   routes,
   proxy: {
     '/api': {
