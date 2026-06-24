@@ -54,5 +54,14 @@
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": "eslint --fix",
     "*.{js,jsx,ts,tsx,css,less,md,json}": "prettier --write"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.21.4": true,
+    "core-js@3.34.0": true,
+    "core-js-pure@3.49.0": true,
+    "es5-ext@0.10.64": true,
+    "fsevents@2.3.3": true,
+    "unrs-resolver@1.12.2": true
   }
 }

@@ -1,0 +1,97 @@
+name: 📚 Doc Updater
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'lims-web/src/main/java/com/lims/web/controller/**/*.java'
+      - 'scripts/doc-updater.mjs'
+  push:
+    branches: [main, master]
+    paths:
+      - 'lims-web/src/main/java/com/lims/web/controller/**/*.java'
+
+jobs:
+  # ── PR 检查：文档是否与代码同步 ──────────────────────
+  check-docs:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run doc-updater (dry-run)
+        id: doccheck
+        run: node scripts/doc-updater.mjs --check-readme --dry-run > /tmp/doc-check.log 2>&1
+        continue-on-error: true
+
+      - name: Check for doc drift
+        run: |
+          # 实际运行（非 dry-run）来检测差异
+          cp docs/runbook/api-summary.md /tmp/api-summary-before.md
+          cp README.md /tmp/readme-before.md
+
+          node scripts/doc-updater.mjs --sync-readme
+
+          DIFF_API=$(diff /tmp/api-summary-before.md docs/runbook/api-summary.md || true)
+          DIFF_README=$(diff /tmp/readme-before.md README.md || true)
+
+          if [ -n "$DIFF_API" ] || [ -n "$DIFF_README" ]; then
+            echo "## ⚠️ 文档不同步！" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "以下文档需要更新，请在本地运行:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo 'node scripts/doc-updater.mjs --sync-readme' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            [ -n "$DIFF_API" ] && echo "**api-summary.md** 有变更" >> $GITHUB_STEP_SUMMARY
+            [ -n "$DIFF_README" ] && echo "**README.md** 功能模块表有变更" >> $GITHUB_STEP_SUMMARY
+
+            # 恢复原始文件
+            cp /tmp/api-summary-before.md docs/runbook/api-summary.md
+            cp /tmp/readme-before.md README.md
+
+            echo "❌ 文档与代码不同步，请运行 doc-updater"
+            exit 1
+          fi
+
+          echo "✅ 文档与代码同步"
+          echo "## ✅ 文档检查通过" >> $GITHUB_STEP_SUMMARY
+
+  # ── Push main：自动同步文档 ──────────────────────────
+  auto-sync:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run doc-updater
+        run: node scripts/doc-updater.mjs --sync-readme
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/runbook/api-summary.md README.md
+
+          if git diff --cached --quiet; then
+            echo "✅ 无需更新，文档已是最新"
+          else
+            git commit -m "📚 docs: auto-sync API summary & README modules [skip ci]"
+            git push
+            echo "✅ 文档已自动同步并推送"
+          fi

@@ -79,8 +79,14 @@ public class RequestService {
         if (dto.getAnalysisItemIds() != null) {
             BigDecimal totalCost = BigDecimal.ZERO;
             int sortOrder = 0;
+            
+            // ✅ 修复 N+1 查询：批量查询所有分析项
+            List<AnalysisItem> items = analysisItemMapper.selectBatchIds(dto.getAnalysisItemIds());
+            Map<String, AnalysisItem> itemMap = items.stream()
+                    .collect(java.util.stream.Collectors.toMap(AnalysisItem::getId, item -> item));
+            
             for (String itemId : dto.getAnalysisItemIds()) {
-                AnalysisItem item = analysisItemMapper.selectById(itemId);
+                AnalysisItem item = itemMap.get(itemId);
                 if (item != null) {
                     AnalysisTask task = new AnalysisTask();
                     task.setRequestId(request.getId());

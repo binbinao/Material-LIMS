@@ -1,0 +1,31 @@
+#!/bin/sh
+# ============================================================
+# doc-updater pre-commit hook
+# 每次 commit 前自动检查 & 更新 api-summary.md + README 模块表
+# ============================================================
+
+set -e
+
+# 获取项目根目录（相对于 .githooks/ 的父目录）
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$HOOK_DIR")"
+
+# 检查是否有 Java Controller 文件被修改
+STAGED_JAVA=$(git diff --cached --name-only --diff-filter=ACM | grep 'lims-web/src/main/java/com/lims/web/controller/.*\.java$' || true)
+
+if [ -z "$STAGED_JAVA" ]; then
+    echo "📚 [doc-updater] 未检测到 Controller 变更，跳过文档检查"
+    exit 0
+fi
+
+echo "📚 [doc-updater] 检测到 Controller 变更，运行文档同步..."
+echo "   变更文件:"
+echo "$STAGED_JAVA" | while read f; do echo "     - $f"; done
+
+# 运行 doc-updater
+node "$PROJECT_ROOT/scripts/doc-updater.mjs" --sync-readme
+
+# 将更新的文档添加到 staging area
+git add "$PROJECT_ROOT/docs/runbook/api-summary.md" "$PROJECT_ROOT/README.md"
+
+echo "✅ [doc-updater] 文档已同步并暂存"

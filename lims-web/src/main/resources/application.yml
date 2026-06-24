@@ -13,6 +13,10 @@ spring:
       maximum-pool-size: 20
       minimum-idle: 5
       connection-timeout: 30000
+      idle-timeout: 600000          # 10 分钟空闲回收
+      max-lifetime: 1800000         # 30 分钟最大存活
+      leak-detection-threshold: 60000  # 60 秒连接泄漏告警
+      connection-test-query: SELECT 1  # PostgreSQL 连接验证
   data:
     redis:
       host: ${REDIS_HOST:localhost}
