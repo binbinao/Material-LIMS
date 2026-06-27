@@ -50,7 +50,7 @@ const UserList: React.FC = () => {
       title: intl.formatMessage({ id: 'common.operation' }),
       valueType: 'option', width: 80,
       render: (_, record: API.SysUser) => [
-        <a key="edit" onClick={() => { setEditingUser(record); form.setFieldsValue({ roles: record.roles?.split(',') || [] }); setModalVisible(true); }}>Edit Roles</a>,
+        <a key="edit" onClick={() => { setEditingUser(record); form.setFieldsValue({ roles: record.roles?.split(',') || [] }); setModalVisible(true); }}>{intl.formatMessage({ id: 'admin.user.editRoles' })}</a>,
       ],
     },
   ];
@@ -80,7 +80,7 @@ const UserList: React.FC = () => {
         rowKey="id" search={{ labelWidth: 'auto' }}
       />
       <Modal
-        title="Edit User Roles" open={modalVisible} onOk={handleSubmit}
+        title={intl.formatMessage({ id: 'admin.user.editRoles' })} open={modalVisible} onOk={handleSubmit}
         onCancel={() => { setModalVisible(false); form.resetFields(); setEditingUser(null); }}
       >
         <Form form={form} layout="vertical">

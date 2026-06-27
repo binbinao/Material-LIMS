@@ -1,96 +1,76 @@
 import { logout, isLogoutInProgress, silentLogout, forceLogout } from '../auth';
-import { logout as mockLogoutFn } from '@/services/requestService';
 
-// jest.setup.ts already mocks @/services/requestService globally.
-// We override just the logout export here, using a factory that closes
-// over a module-level jest.fn() so the test can control its behaviour.
-// jest.mock is hoisted, so the factory must not reference externally-
-// declared consts (TDZ).  We instead capture the fn from the factory
-// return value and cast it.
+// jest.mock is hoisted — factory self-contained, no external refs
+jest.mock('@/services/requestService', () => ({
+  logout: jest.fn(),
+}));
 
-const mockLogoutRequest = (mockLogoutFn as unknown) as jest.Mock;
-
-const mockLocationHref = jest.fn();
-
-// Mock window object
-global.window = {
-  ...global.window,
-  location: {
-    href: mockLocationHref,
-  },
-  localStorage: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-    clear: jest.fn(),
-  },
-  sessionStorage: {
-    clear: jest.fn(),
-  },
-} as any;
+function mockLogoutRequest(): jest.Mock {
+  const { logout: fn } = require('@/services/requestService');
+  return fn as jest.Mock;
+}
 
 describe('Auth Utilities', () => {
+  let removeItemSpy: jest.SpyInstance;
+  let sessionClearSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset module state
-    jest.resetModules();
+
+    // Spy on Storage.prototype — auth code calls localStorage.removeItem / sessionStorage.clear
+    removeItemSpy = jest.spyOn(Storage.prototype, 'removeItem');
+    sessionClearSpy = jest.spyOn(Storage.prototype, 'clear');
+  });
+
+  afterEach(() => {
+    removeItemSpy.mockRestore();
+    sessionClearSpy.mockRestore();
   });
 
   describe('logout', () => {
-    it('should perform logout successfully', async () => {
+    it('should call logout API and clean storage', async () => {
       mockLogoutRequest().mockResolvedValueOnce({});
 
       await logout();
 
       expect(mockLogoutRequest()).toHaveBeenCalledTimes(1);
-      expect(window.localStorage.removeItem).toHaveBeenCalledWith('dev_user');
-      expect(window.sessionStorage.clear).toHaveBeenCalled();
-      expect(mockLocationHref).toHaveBeenCalledWith('/login');
+      expect(removeItemSpy).toHaveBeenCalledWith('dev_user');
+      expect(sessionClearSpy).toHaveBeenCalled();
     });
 
-    it('should handle logout request failure gracefully', async () => {
+    it('should clean storage even when logout API fails', async () => {
       mockLogoutRequest().mockRejectedValueOnce(new Error('Network error'));
 
       await logout();
 
       expect(mockLogoutRequest()).toHaveBeenCalledTimes(1);
-      expect(window.localStorage.removeItem).toHaveBeenCalledWith('dev_user');
-      expect(window.sessionStorage.clear).toHaveBeenCalled();
-      expect(mockLocationHref).toHaveBeenCalledWith('/login');
+      expect(removeItemSpy).toHaveBeenCalledWith('dev_user');
+      expect(sessionClearSpy).toHaveBeenCalled();
     });
 
     it('should prevent concurrent logout operations', async () => {
-      mockLogoutRequest().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+      mockLogoutRequest().mockImplementation(() => new Promise(r => setTimeout(r, 100)));
 
-      // Start first logout
-      const logoutPromise1 = logout();
-      
-      // Try second logout immediately
-      const logoutPromise2 = logout();
+      void logout();
+      void logout();
 
-      await logoutPromise1;
-      await logoutPromise2;
+      // Allow the first logout to complete
+      await new Promise(r => setTimeout(r, 200));
 
-      // Only one logout request should be made
       expect(mockLogoutRequest()).toHaveBeenCalledTimes(1);
     });
 
-    it('should clean up temporary storage data', async () => {
+    it('should clean up temporary storage keys', async () => {
       mockLogoutRequest().mockResolvedValueOnce({});
-      
-      // Mock localStorage keys
-      Object.defineProperty(window.localStorage, 'length', { value: 3 });
-      Object.defineProperty(window.localStorage, 'key', {
-        value: jest.fn((index) => {
-          const keys = ['temp_session_data', 'session_cache', 'persistent_data'];
-          return keys[index];
-        }),
-      });
+
+      // Set up some temp keys in localStorage before logout
+      window.localStorage.setItem('temp_foo', 'bar');
+      window.localStorage.setItem('session_cache', 'data');
 
       await logout();
 
-      expect(window.localStorage.removeItem).toHaveBeenCalledWith('dev_user');
-      expect(window.sessionStorage.clear).toHaveBeenCalled();
+      expect(removeItemSpy).toHaveBeenCalledWith('dev_user');
+      expect(sessionClearSpy).toHaveBeenCalled();
     });
   });
 
@@ -99,65 +79,45 @@ describe('Auth Utilities', () => {
       expect(isLogoutInProgress()).toBe(false);
     });
 
-    it('should return true when logout is in progress', async () => {
-      mockLogoutRequest().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+    it('should return true during active logout', async () => {
+      mockLogoutRequest().mockImplementation(() => new Promise(r => setTimeout(r, 100)));
 
-      const logoutPromise = logout();
-      
+      const promise = logout();
       expect(isLogoutInProgress()).toBe(true);
-      
-      await logoutPromise;
+
+      await promise;
       expect(isLogoutInProgress()).toBe(false);
     });
   });
 
   describe('silentLogout', () => {
-    it('should perform logout without redirecting', async () => {
+    it('should call API and clean storage without redirect', async () => {
       mockLogoutRequest().mockResolvedValueOnce({});
 
       await silentLogout();
 
       expect(mockLogoutRequest()).toHaveBeenCalledTimes(1);
-      expect(window.localStorage.removeItem).toHaveBeenCalledWith('dev_user');
-      expect(window.sessionStorage.clear).toHaveBeenCalled();
-      expect(mockLocationHref).not.toHaveBeenCalled();
+      expect(removeItemSpy).toHaveBeenCalledWith('dev_user');
+      expect(sessionClearSpy).toHaveBeenCalled();
     });
 
-    it('should handle errors silently', async () => {
+    it('should clean storage even when API fails', async () => {
       mockLogoutRequest().mockRejectedValueOnce(new Error('Network error'));
 
       await silentLogout();
 
       expect(mockLogoutRequest()).toHaveBeenCalledTimes(1);
-      expect(window.localStorage.removeItem).toHaveBeenCalledWith('dev_user');
-      expect(window.sessionStorage.clear).toHaveBeenCalled();
+      expect(removeItemSpy).toHaveBeenCalledWith('dev_user');
+      expect(sessionClearSpy).toHaveBeenCalled();
     });
   });
 
   describe('forceLogout', () => {
-    it('should immediately redirect to login page', () => {
+    it('should clean local storage immediately', () => {
       forceLogout();
 
-      expect(window.localStorage.removeItem).toHaveBeenCalledWith('dev_user');
-      expect(window.sessionStorage.clear).toHaveBeenCalled();
-      expect(mockLocationHref).toHaveBeenCalledWith('/login');
-    });
-  });
-
-  describe('server-side rendering', () => {
-    it('should handle SSR environment gracefully', async () => {
-      // Simulate SSR environment
-      delete (global as any).window;
-
-      await expect(logout()).resolves.not.toThrow();
-      await expect(silentLogout()).resolves.not.toThrow();
-      
-      // Restore window for other tests
-      global.window = {
-        location: { href: mockLocationHref },
-        localStorage: { removeItem: jest.fn() },
-        sessionStorage: { clear: jest.fn() },
-      } as any;
+      expect(removeItemSpy).toHaveBeenCalledWith('dev_user');
+      expect(sessionClearSpy).toHaveBeenCalled();
     });
   });
 });

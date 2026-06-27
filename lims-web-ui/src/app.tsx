@@ -1,19 +1,31 @@
 // Umi runtime configuration
 import { App as AntApp } from 'antd';
+import { SelectLang } from '@umijs/max';
 import React from 'react';
-import LayoutWrapper from './layouts';
+import UserMenu from './components/UserMenu';
+
+/**
+ * Layout plugin runtime configuration.
+ *
+ * rightContentRender includes both SelectLang (language switcher) and
+ * UserMenu. In 'side' layout mode, ProLayout places rightContentRender
+ * in the sidebar bottom area — not the Header.
+ */
+export const layout = ({ initialState }: { initialState: any }) => ({
+  rightContentRender: () => (
+    <>
+      <SelectLang />
+      <UserMenu initialState={initialState} />
+    </>
+  ),
+});
 
 /**
  * Wrap the whole app in <AntApp> so that App.useApp() inside any page
- * returns the real { message, modal, notification } APIs (otherwise they
- * are non-functional placeholders and produce
- * `TypeError: message.error is not a function` in production builds).
+ * returns the real { message, modal, notification } APIs.
  */
 export function rootContainer(container: React.ReactNode) {
-  const appContainer = React.createElement(AntApp, { style: { height: '100%' } }, container);
-  
-  // 集成自定义布局包装器
-  return React.createElement(LayoutWrapper, {}, appContainer);
+  return React.createElement(AntApp, { style: { height: '100%' } }, container);
 }
 
 export const request = {

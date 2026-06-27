@@ -3,6 +3,7 @@ import { ProTable } from '@ant-design/pro-components';
 import { Button, Modal, Form, Input, Select, Upload, App, Popconfirm, Tag } from 'antd';
 import { PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useRef, useState } from 'react';
+import { useIntl } from '@umijs/max';
 import { getKnowledgeDocs, uploadKnowledgeDoc, deleteKnowledgeDoc } from '@/services/requestService';
 
 const CATEGORY_COLOR: Record<string, string> = { MANUAL: 'blue', VIDEO: 'purple' };
@@ -13,11 +14,12 @@ const KnowledgeList: React.FC = () => {
   const [form] = Form.useForm();
   const [fileList, setFileList] = useState<any[]>([]);
   const { message } = App.useApp();
+  const intl = useIntl();
 
   const handleUpload = async () => {
     const v = await form.validateFields();
     if (!fileList.length) {
-      message.error('Please select a file');
+      message.error(intl.formatMessage({ id: 'common.fail' }));
       return;
     }
     const fd = new FormData();
@@ -27,43 +29,43 @@ const KnowledgeList: React.FC = () => {
     if (v.description) fd.append('description', v.description);
     try {
       await uploadKnowledgeDoc(fd);
-      message.success('Uploaded');
+      message.success(intl.formatMessage({ id: 'common.success' }));
       setOpen(false); form.resetFields(); setFileList([]);
       actionRef.current?.reload();
     } catch (e: any) {
-      message.error(e?.message || 'Upload failed');
+      message.error(e?.message || intl.formatMessage({ id: 'common.fail' }));
     }
   };
 
   const columns: ProColumns[] = [
     {
-      title: 'Title', dataIndex: 'title', width: 320,
+      title: intl.formatMessage({ id: 'knowledge.title' }), dataIndex: 'title', width: 320,
       render: (_, r: any) => <a href={r.fileUrl} target="_blank" rel="noreferrer">{r.title}</a>,
     },
     {
-      title: 'Category', dataIndex: 'category', width: 110,
+      title: intl.formatMessage({ id: 'knowledge.category' }), dataIndex: 'category', width: 110,
       valueType: 'select',
-      valueEnum: { MANUAL: { text: 'Manual' }, VIDEO: { text: 'Video' } },
-      render: (_, r: any) => <Tag color={CATEGORY_COLOR[r.category]}>{r.category}</Tag>,
+      valueEnum: { MANUAL: { text: intl.formatMessage({ id: 'knowledge.category.MANUAL' }) }, VIDEO: { text: intl.formatMessage({ id: 'knowledge.category.VIDEO' }) } },
+      render: (_, r: any) => <Tag color={CATEGORY_COLOR[r.category]}>{intl.formatMessage({ id: `knowledge.category.${r.category}`, defaultMessage: r.category })}</Tag>,
     },
     {
-      title: 'Size', dataIndex: 'fileSize', width: 100, search: false,
+      title: intl.formatMessage({ id: 'knowledge.size' }), dataIndex: 'fileSize', width: 100, search: false,
       render: (v: number) => v ? `${(v / 1024 / 1024).toFixed(2)} MB` : '-',
     },
-    { title: 'Description', dataIndex: 'description', search: false, ellipsis: true },
-    { title: 'Updated', dataIndex: 'updatedAt', width: 160, valueType: 'dateTime', search: false },
+    { title: intl.formatMessage({ id: 'knowledge.description' }), dataIndex: 'description', search: false, ellipsis: true },
+    { title: intl.formatMessage({ id: 'common.operation' }), dataIndex: 'updatedAt', width: 160, valueType: 'dateTime', search: false },
     {
-      title: 'Action', valueType: 'option', width: 160, fixed: 'right',
+      title: intl.formatMessage({ id: 'common.operation' }), valueType: 'option', width: 160, fixed: 'right',
       render: (_, r: any) => [
         <a key="dl" href={r.fileUrl} target="_blank" rel="noreferrer">
-          <DownloadOutlined /> Download
+          <DownloadOutlined /> {intl.formatMessage({ id: 'common.download' })}
         </a>,
-        <Popconfirm key="del" title="Delete this document?" onConfirm={async () => {
+        <Popconfirm key="del" title={intl.formatMessage({ id: 'knowledge.delete.confirm' })} onConfirm={async () => {
           await deleteKnowledgeDoc(r.id);
-          message.success('Deleted');
+          message.success(intl.formatMessage({ id: 'common.success' }));
           actionRef.current?.reload();
         }}>
-          <a style={{ color: '#f5222d' }}>Delete</a>
+          <a style={{ color: '#f5222d' }}>{intl.formatMessage({ id: 'common.delete' })}</a>
         </Popconfirm>,
       ],
     },
@@ -91,27 +93,30 @@ const KnowledgeList: React.FC = () => {
         }}
         search={{ labelWidth: 'auto' }}
         toolBarRender={() => [
-          <Button key="up" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Upload</Button>,
+          <Button key="up" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{intl.formatMessage({ id: 'knowledge.upload' })}</Button>,
         ]}
       />
-      <Modal title="Upload Knowledge Document" open={open}
+      <Modal title={intl.formatMessage({ id: 'knowledge.upload.title' })} open={open}
         onOk={handleUpload} onCancel={() => { setOpen(false); form.resetFields(); setFileList([]); }}
         destroyOnClose>
         <Form form={form} layout="vertical">
-          <Form.Item name="title" label="Title" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="category" label="Category" rules={[{ required: true }]}>
-            <Select options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'VIDEO', label: 'Video' }]} />
+          <Form.Item name="title" label={intl.formatMessage({ id: 'knowledge.title' })} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="category" label={intl.formatMessage({ id: 'knowledge.category' })} rules={[{ required: true }]}>
+            <Select options={[
+              { value: 'MANUAL', label: intl.formatMessage({ id: 'knowledge.category.MANUAL' }) },
+              { value: 'VIDEO', label: intl.formatMessage({ id: 'knowledge.category.VIDEO' }) },
+            ]} />
           </Form.Item>
-          <Form.Item label="File" required>
+          <Form.Item label={intl.formatMessage({ id: 'knowledge.upload' })} required>
             <Upload
               fileList={fileList}
               beforeUpload={() => false}
               maxCount={1}
               onChange={({ fileList: fl }) => setFileList(fl)}>
-              <Button icon={<UploadOutlined />}>Select File</Button>
+              <Button icon={<UploadOutlined />}>{intl.formatMessage({ id: 'common.upload' })}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="description" label="Description"><Input.TextArea rows={3} /></Form.Item>
+          <Form.Item name="description" label={intl.formatMessage({ id: 'knowledge.description' })}><Input.TextArea rows={3} /></Form.Item>
         </Form>
       </Modal>
     </>

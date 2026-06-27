@@ -2,6 +2,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { Tag, Modal, Descriptions, Typography, App } from 'antd';
 import { useRef, useState } from 'react';
+import { useIntl } from '@umijs/max';
 import { getAdminLogs } from '@/services/requestService';
 
 const MODULE_COLOR: Record<string, string> = {
@@ -15,16 +16,17 @@ const LogList: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [activeLog, setActiveLog] = useState<any>(null);
   const { message } = App.useApp();
+  const intl = useIntl();
 
   const columns: ProColumns[] = [
-    { title: 'Timestamp', dataIndex: 'createdAt', width: 170, valueType: 'dateTime', sorter: true, search: false },
+    { title: intl.formatMessage({ id: 'admin.log.timestamp' }), dataIndex: 'createdAt', width: 170, valueType: 'dateTime', sorter: true, search: false },
     {
-      title: 'Date Range', dataIndex: 'dateRange', valueType: 'dateRange', hideInTable: true,
+      title: intl.formatMessage({ id: 'admin.log.dateRange' }), dataIndex: 'dateRange', valueType: 'dateRange', hideInTable: true,
       search: { transform: (v: [string, string]) => ({ startDate: v?.[0], endDate: v?.[1] }) },
     },
-    { title: 'User', dataIndex: 'userName', width: 140 },
+    { title: intl.formatMessage({ id: 'admin.log.user' }), dataIndex: 'userName', width: 140 },
     {
-      title: 'Module', dataIndex: 'module', width: 130,
+      title: intl.formatMessage({ id: 'admin.log.module' }), dataIndex: 'module', width: 130,
       valueType: 'select',
       valueEnum: {
         REQUEST: { text: 'Request' },
@@ -41,12 +43,12 @@ const LogList: React.FC = () => {
       },
       render: (_, r: any) => <Tag color={MODULE_COLOR[r.module] || 'default'}>{r.module}</Tag>,
     },
-    { title: 'Action', dataIndex: 'action', width: 120 },
-    { title: 'Entity', dataIndex: 'entityId', width: 160, search: false, ellipsis: true },
-    { title: 'IP', dataIndex: 'ip', width: 130, search: false },
+    { title: intl.formatMessage({ id: 'admin.log.action' }), dataIndex: 'action', width: 120 },
+    { title: intl.formatMessage({ id: 'admin.log.entity' }), dataIndex: 'entityId', width: 160, search: false, ellipsis: true },
+    { title: intl.formatMessage({ id: 'admin.log.ip' }), dataIndex: 'ip', width: 130, search: false },
     {
-      title: 'Detail', valueType: 'option', width: 80, fixed: 'right',
-      render: (_, r: any) => [<a key="d" onClick={() => { setActiveLog(r); setDetailOpen(true); }}>View</a>],
+      title: intl.formatMessage({ id: 'common.detail' }), valueType: 'option', width: 80, fixed: 'right',
+      render: (_, r: any) => [<a key="d" onClick={() => { setActiveLog(r); setDetailOpen(true); }}>{intl.formatMessage({ id: 'common.detail' })}</a>],
     },
   ];
 
@@ -77,7 +79,7 @@ const LogList: React.FC = () => {
         search={{ labelWidth: 'auto' }}
       />
 
-      <Modal title="Audit Log Detail" open={detailOpen} footer={null} width={700}
+      <Modal title={intl.formatMessage({ id: 'admin.log.detail.title' })} open={detailOpen} footer={null} width={700}
         onCancel={() => setDetailOpen(false)}>
         {activeLog && (
           <Descriptions column={1} bordered size="small">
