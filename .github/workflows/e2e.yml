@@ -109,6 +109,10 @@ jobs:
       - name: Run Playwright tests
         run: cd lims-web-ui && npx playwright test
 
+      - name: Print backend log on failure
+        if: failure()
+        run: tail -n 240 backend.log || true
+
       - name: Upload backend log
         if: always()
         uses: actions/upload-artifact@v4
