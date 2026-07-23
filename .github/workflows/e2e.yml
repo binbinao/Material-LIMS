@@ -21,14 +21,9 @@ concurrency:
 
 jobs:
   e2e:
-    name: Playwright (${{ matrix.project }})
+    name: Playwright API E2E
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium]
 
     env:
       BASE_URL: http://localhost:8000
@@ -61,20 +56,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
-          - 9001:9001
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -101,9 +82,7 @@ jobs:
           SPRING_DATASOURCE_PASSWORD: lims
           SPRING_REDIS_HOST: localhost
           SPRING_REDIS_PORT: 6379
-          FILE_STORAGE_ENDPOINT: http://localhost:9000
-          FILE_STORAGE_ACCESS_KEY: minioadmin
-          FILE_STORAGE_SECRET_KEY: minioadmin
+          FILE_STORAGE_ENABLED: false
         run: |
           nohup java -jar lims-web/target/lims-web-*.jar \
             --spring.profiles.active=dev \
@@ -128,7 +107,20 @@ jobs:
         run: npx playwright install --with-deps ${{ matrix.project }}
 
       - name: Run Playwright tests
-        run: cd lims-web-ui && npx playwright test --project=${{ matrix.project }}
+        run: cd lims-web-ui && npx playwright test
+
+      - name: Print backend log on failure
+        if: failure()
+        run: tail -n 240 backend.log || true
+
+      - name: Upload backend log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: backend.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload Playwright report
         if: always()

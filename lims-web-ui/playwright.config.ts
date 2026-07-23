@@ -20,6 +20,7 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
+  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
   fullyParallel: false,           // API 测试串行执行，避免数据竞态
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

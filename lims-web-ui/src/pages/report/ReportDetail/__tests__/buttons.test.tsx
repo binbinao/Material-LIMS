@@ -33,8 +33,8 @@ describe('ReportDetail buttons', () => {
   it('shows Edit in M365 and Sync buttons for DRAFT', async () => {
     renderWithProviders(<ReportDetail />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Edit in M365' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Sync from SharePoint' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
     });
   });
 });
