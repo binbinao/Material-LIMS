@@ -21,14 +21,9 @@ concurrency:
 
 jobs:
   e2e:
-    name: Playwright (${{ matrix.project }})
+    name: Playwright API E2E
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium]
 
     env:
       BASE_URL: http://localhost:8000
@@ -112,7 +107,7 @@ jobs:
         run: npx playwright install --with-deps ${{ matrix.project }}
 
       - name: Run Playwright tests
-        run: cd lims-web-ui && npx playwright test --project=${{ matrix.project }}
+        run: cd lims-web-ui && npx playwright test
 
       - name: Upload Playwright report
         if: always()

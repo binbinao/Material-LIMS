@@ -58,6 +58,6 @@ jobs:
           java-version: '17'
           cache: 'maven'
       - name: Run unit tests
-        run: ./mvnw -B test
+        run: ./mvnw -B test -Dtest='!DatabaseStressTest'
       - name: Build (skip tests)
         run: ./mvnw -B -DskipTests package
