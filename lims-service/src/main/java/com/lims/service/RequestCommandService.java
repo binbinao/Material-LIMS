@@ -1,6 +1,5 @@
 package com.lims.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lims.common.exception.BusinessException;
 import com.lims.common.exception.ErrorCode;
 import com.lims.common.security.SecurityUtils;
@@ -289,26 +288,11 @@ public class RequestCommandService {
     }
 
     /**
-     * 生成委托编号：REQ-YYYY-NNNNN。通过数据库 MAX 查询避免并发冲突。
+     * 生成委托编号：REQ-YYYY-NNNNN。编号由数据库序列原子分配，支持并发创建。
      */
     private String generateRequestNo() {
         String year = String.valueOf(LocalDate.now().getYear());
-        String prefix = "REQ-" + year + "-";
-
-        LambdaQueryWrapper<Request> wrapper = new LambdaQueryWrapper<>();
-        wrapper.likeRight(Request::getRequestNo, prefix)
-                .orderByDesc(Request::getRequestNo)
-                .last("LIMIT 1");
-        Request lastRequest = requestMapper.selectOne(wrapper);
-
-        int nextNum = 1;
-        if (lastRequest != null) {
-            String lastNo = lastRequest.getRequestNo();
-            String numPart = lastNo.substring(prefix.length());
-            nextNum = Integer.parseInt(numPart) + 1;
-        }
-
-        return prefix + String.format("%05d", nextNum);
+        return "REQ-" + year + "-" + String.format("%05d", requestMapper.nextRequestNumber());
     }
 
     /**
