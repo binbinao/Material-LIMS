@@ -146,7 +146,10 @@ function parseArgs() {
     strict: args.includes('--strict'),
     fixOnly: args.includes('--fix-only'),
     help: args.includes('--help'),
-    gitCommit: args.includes('--git-commit')
+    gitCommit: args.includes('--git-commit'),
+    files: args.includes('--files')
+      ? args.slice(args.indexOf('--files') + 1).filter((arg) => !arg.startsWith('--'))
+      : []
   };
 }
 
@@ -349,17 +352,23 @@ async function main() {
   const allIssues = [];
   const allFixes = [];
 
-  // 扫描四层架构
+  // 扫描四层架构；PR 可通过 --files 只审查本次变更，避免历史问题阻断新变更。
+  const selectedFiles = args.files.length > 0
+    ? args.files.map((file) => file.startsWith('/') ? file : join(PROJECT_ROOT, file))
+        .filter((file) => existsSync(file) && file.endsWith('.java'))
+    : null;
   for (const [layer, directory] of Object.entries(DIRECTORIES)) {
     console.log(`📂 扫描 ${layer} 层: ${directory}`);
-    const files = scanJavaFiles(directory);
-    
+    const files = selectedFiles
+      ? selectedFiles.filter((file) => file.startsWith(directory))
+      : scanJavaFiles(directory);
+
     for (const file of files) {
       const { issues, fixes } = reviewFile(file, args);
       allIssues.push(...issues);
       allFixes.push(...fixes);
     }
-    
+
     console.log(`   📄 扫描 ${files.length} 个文件\n`);
   }
 

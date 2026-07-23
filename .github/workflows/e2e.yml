@@ -61,20 +61,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
-          - 9001:9001
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -101,9 +87,7 @@ jobs:
           SPRING_DATASOURCE_PASSWORD: lims
           SPRING_REDIS_HOST: localhost
           SPRING_REDIS_PORT: 6379
-          FILE_STORAGE_ENDPOINT: http://localhost:9000
-          FILE_STORAGE_ACCESS_KEY: minioadmin
-          FILE_STORAGE_SECRET_KEY: minioadmin
+          FILE_STORAGE_ENABLED: false
         run: |
           nohup java -jar lims-web/target/lims-web-*.jar \
             --spring.profiles.active=dev \
