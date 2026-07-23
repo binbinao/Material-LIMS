@@ -10,6 +10,7 @@
 // page-level structural tests can render without booting Umi.
 
 import '@testing-library/jest-dom';
+import enUS from './src/locales/en-US';
 
 // Polyfill window.matchMedia — Ant Design ProTable / Grid / Responsive
 // components call it on mount; jsdom doesn't implement it. Without this
@@ -53,8 +54,13 @@ jest.mock('@umijs/max', () => {
     data: undefined, loading: false, run: fn, refresh: noop,
   }));
   const useIntl = jest.fn(() => ({
-    formatMessage: ({ id, defaultMessage }: { id?: string; defaultMessage?: string }) =>
-      defaultMessage ?? id ?? '',
+    formatMessage: ({ id, defaultMessage }: { id?: string; defaultMessage?: string }, values?: Record<string, unknown>) => {
+      const template = String((id && enUS[id as keyof typeof enUS]) ?? defaultMessage ?? id ?? '');
+      return Object.entries(values ?? {}).reduce(
+        (message, [key, value]) => message.replace(`{${key}}`, String(value)),
+        template,
+      );
+    },
     locale: 'en-US',
   }));
   const useAccess = jest.fn(() => ({

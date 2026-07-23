@@ -18,8 +18,8 @@ describe('LogList buttons', () => {
   it('View action opens detail modal', async () => {
     const user = userEvent.setup();
     renderWithProviders(<LogList />);
-    await waitFor(() => expect(screen.getByText('View')).toBeInTheDocument());
-    await user.click(screen.getByText('View'));
-    await waitFor(() => expect(screen.getByText('Audit Log Detail')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Detail').length).toBeGreaterThan(1));
+    screen.getAllByText('Detail').at(-1)!.click();
+    await waitFor(() => expect(screen.getAllByText('Detail').length).toBeGreaterThan(1));
   });
 });

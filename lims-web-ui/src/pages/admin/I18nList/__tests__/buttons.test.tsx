@@ -17,16 +17,16 @@ describe('I18nList buttons', () => {
   it('Create button opens modal', async () => {
     const user = userEvent.setup();
     renderWithProviders(<I18nList />);
-    await waitFor(() => expect(screen.getByText('common.create')).toBeInTheDocument());
-    await user.click(screen.getByText('common.create'));
+    await waitFor(() => expect(screen.getByText('Create')).toBeInTheDocument());
+    await user.click(screen.getByText('Create'));
     await waitFor(() => expect(screen.getByText('Add Translation')).toBeInTheDocument());
   });
 
   it('renders Edit and Delete actions', async () => {
     renderWithProviders(<I18nList />);
     await waitFor(() => {
-      expect(screen.getByText('common.edit')).toBeInTheDocument();
-      expect(screen.getByText('common.delete')).toBeInTheDocument();
+      expect(screen.getByText('Edit')).toBeInTheDocument();
+      expect(screen.getByText('Delete')).toBeInTheDocument();
     });
   });
 });
