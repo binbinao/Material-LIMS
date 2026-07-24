@@ -74,6 +74,7 @@ const UserList: React.FC = () => {
             const result = await getAdminUsers({ page: params.current, size: params.pageSize, keyword: params.keyword });
             return { data: result?.data?.records ?? [], total: result?.data?.total ?? 0, success: result?.code === 200 };
           } catch {
+            message.error('Failed to load users');
             return { data: [], total: 0, success: false };
           }
         }}
