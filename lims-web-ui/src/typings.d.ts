@@ -155,4 +155,95 @@ declare namespace API {
     size: number;
     current: number;
   }
+
+  /** Issue #87: Unified API response wrapper */
+  interface IApiResponse<T = any> {
+    code: number;
+    message?: string;
+    data: T;
+  }
+
+  /** Issue #87: Equipment repair entity */
+  interface EquipmentRepair {
+    id?: string;
+    equipmentId: string;
+    issue: string;
+    status: string;
+    repairDate?: string;
+    completedAt?: string;
+    cost?: number;
+    remark?: string;
+  }
+
+  /** Issue #87: Knowledge document entity */
+  interface KnowledgeDoc {
+    id?: string;
+    title: string;
+    category: string;
+    description?: string;
+    fileUrl?: string;
+    fileSize?: number;
+    uploadedBy?: string;
+  }
+
+  /** Issue #87: Sample entity (Issue #80) */
+  interface Sample {
+    id?: string;
+    requestId: string;
+    sampleName?: string;
+    barcode?: string;
+    batchNo?: string;
+    container?: string;
+    quantity?: number;
+    quantityUnit?: string;
+    storageLocation?: string;
+    custodianId?: string;
+    receivedCondition?: string;
+    sampleStatus?: string;
+    receivedAt?: string;
+    disposedAt?: string;
+    disposalMethod?: string;
+    parentSampleId?: string;
+  }
+
+  /** Issue #87: Test result entity (Issue #79) */
+  interface TestResult {
+    id?: string;
+    analysisTaskId: string;
+    requestId: string;
+    itemId?: string;
+    testMethod?: string;
+    equipmentId?: string;
+    rawValue?: string;
+    enteredValue?: number;
+    unit?: string;
+    specLower?: number;
+    specUpper?: number;
+    judgment?: string;
+    uncertainty?: number;
+    repeatCount?: number;
+    remark?: string;
+    enteredBy?: string;
+    enteredAt?: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    status?: string;
+  }
+
+  /** Issue #87: Equipment calibration entity (Issue #81) */
+  interface EquipmentCalibration {
+    id?: string;
+    equipmentId: string;
+    calibrationType: string;
+    calibratedAt: string;
+    nextCalibrationDate?: string;
+    certificateNo?: string;
+    certificateUrl?: string;
+    calibratedBy?: string;
+    result: string;
+    rangeMin?: number;
+    rangeMax?: number;
+    accuracy?: string;
+    remark?: string;
+  }
 }
