@@ -141,6 +141,15 @@ public class RequestController {
         return R.ok();
     }
 
+    @Operation(summary = "Manager advances request to approval phase")
+    @PostMapping("/{id}/advance-to-approving")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @AuditLog(module = "REQUEST", action = "ADVANCE_TO_APPROVING")
+    public R<Void> advanceToApproving(@PathVariable String id) {
+        analysisTaskService.advanceToApproving(id);
+        return R.ok();
+    }
+
     @Operation(summary = "Complete request")
     @PostMapping("/{id}/complete")
     @PreAuthorize("hasRole('MANAGER')")
