@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class DatabaseStressTest {
 
     @Autowired
-    private RequestService requestService;
+    private RequestCommandService requestService;
 
     // @Autowired
     // private AnalysisTaskService analysisTaskService; // 服务类不存在，暂时注释掉
