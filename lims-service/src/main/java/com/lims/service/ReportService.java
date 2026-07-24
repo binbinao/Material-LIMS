@@ -170,9 +170,15 @@ public class ReportService {
         report.setStatus(ReportStatus.APPROVED.getValue());
         report.setApprovedBy(managerId);
         report.setApprovedAt(LocalDateTime.now());
+
+        // Issue #82: Record e-signature for 21 CFR Part 11 compliance
+        report.setSignatureUserId(managerId);
+        report.setSignatureMeaning("I approve this report as accurate and complete");
+        report.setSignedAt(LocalDateTime.now());
+
         reportMapper.updateById(report);
 
-        log.info("Approved report: reportId={}, approvedBy={}", reportId, managerId);
+        log.info("Approved report with e-signature: reportId={}, approvedBy={}", reportId, managerId);
     }
 
     /**
