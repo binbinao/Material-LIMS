@@ -28,24 +28,23 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  # PostgreSQL数据库监控
-  - job_name: 'postgres'
+  # PostgreSQL监控 — 需要 postgres_exporter sidecar
+  # Issue #89: 之前直接抓取 postgres:5432/metrics，但 PostgreSQL
+  # 本身不暴露 /metrics 端点。需要部署 postgres_exporter 并监听 9187。
+  - job_name: 'postgres-exporter'
     static_configs:
-      - targets: ['postgres:5432']
-    metrics_path: '/metrics'
+      - targets: ['postgres-exporter:9187']
     scrape_interval: 30s
 
-  # Redis监控
-  - job_name: 'redis'
+  # Redis监控 — 需要 redis_exporter sidecar
+  # Issue #89: 之前直接抓取 redis:6379/metrics，但 Redis 本身
+  # 不暴露 /metrics 端点。需要部署 redis_exporter 并监听 9121。
+  - job_name: 'redis-exporter'
     static_configs:
-      - targets: ['redis:6379']
-    metrics_path: '/metrics'
+      - targets: ['redis-exporter:9121']
     scrape_interval: 30s
 
-# 远程写入配置（可选）
-remote_write:
-  - url: "http://alertmanager:9093/api/v1/alerts"
-
-# 远程读取配置（可选）
-remote_read:
-  - url: "http://alertmanager:9093/api/v1/alerts"
+# 远程写入/读取已移除：
+# Issue #89: 之前将 remote_write/remote_read 指向 Alertmanager API，
+# 但 Alertmanager 不是 Prometheus remote storage，这会导致持续的错误请求。
+# 如需长期存储，请配置 Thanos、Cortex 或 Mimir 的地址。
