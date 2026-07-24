@@ -31,4 +31,9 @@ public class SysUser {
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // Issue #83: Security hardening fields
+    private Integer failedLoginAttempts;
+    private LocalDateTime lockedUntil;
+    private Integer sessionVersion;
 }
