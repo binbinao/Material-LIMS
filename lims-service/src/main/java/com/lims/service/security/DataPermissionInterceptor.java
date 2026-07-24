@@ -27,6 +27,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 import java.sql.SQLException;
 
@@ -44,7 +47,8 @@ import java.sql.SQLException;
  *      MANAGER / ADMIN 也不过滤（看全量）。
  *
  * 实现策略：仅当 SQL 是 SELECT 且 from 单表为受控表 + 当前用户为非管理者角色时，注入条件。
- * 复杂 join 查询通过正则回退机制处理，回退失败则 fail-soft 放行并打 WARN 日志。
+ * 复杂查询优先通过正则回退机制处理；无法证明受控表已过滤时拒绝执行，避免
+ * 在 SQL 解析失败时把业务数据暴露给普通用户。
  */
 @Slf4j
 @Component
@@ -52,6 +56,12 @@ public class DataPermissionInterceptor implements InnerInterceptor {
 
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_MANAGER = "MANAGER";
+    private static final Set<String> KNOWN_CONTROLLED_TABLES =
+            Set.of("request", "analysis_task", "report", "sample");
+    private static final Pattern CONTROLLED_TABLE_REFERENCE = Pattern.compile(
+            "(?i)\\b(?:from|join)\\s+(?:[\\w\\\"`]+\\.)?[\\\"`]?"
+                    + "(request|analysis_task|report|sample)\\b");
+    private static final AtomicLong FILTER_FAILURES = new AtomicLong();
 
     /**
      * True when the active Spring profile contains "dev". In dev we
@@ -90,9 +100,20 @@ public class DataPermissionInterceptor implements InnerInterceptor {
         try {
             Statement stmt = CCJSqlParserUtil.parse(originalSql);
             if (!(stmt instanceof Select)) return;
-            // jsqlparser 4.9: PlainSelect 实现了 Select 接口；复杂查询（SetOperationList 等）跳过
-            if (!(stmt instanceof PlainSelect ps)) return;
-            if (!(ps.getFromItem() instanceof Table table)) return;
+            // jsqlparser 4.9: PlainSelect 实现了 Select 接口；复杂查询（SetOperationList 等）
+            // 必须先确认不涉及受控表，不能静默放行。
+            if (!(stmt instanceof PlainSelect ps)) {
+                if (containsControlledTableReference(originalSql)) {
+                    failClosed("unsupported select shape");
+                }
+                return;
+            }
+            if (!(ps.getFromItem() instanceof Table table)) {
+                if (containsControlledTableReference(originalSql)) {
+                    failClosed("unsupported FROM item");
+                }
+                return;
+            }
             String tableName = stripQuotes(table.getName()).toLowerCase();
 
             Expression injected = buildPermissionPredicate(tableName, principal);
@@ -103,19 +124,13 @@ public class DataPermissionInterceptor implements InnerInterceptor {
             String newSql = ps.toString();
             PluginUtils.mpBoundSql(boundSql).sql(newSql);
             if (log.isDebugEnabled()) {
-                log.debug("Data permission injected. table={}, user={}, sql={}", tableName, principal.userId(), newSql);
+                log.debug("Data permission injected. table={}, user={}", tableName, principal.userId());
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            // Issue #19: fail-soft instead of fail-closed. jsqlparser 4.9
-            // cannot parse JOIN/UNION/CTE/subquery statements. We now:
-            //   1. try a regex-based fallback that picks the first
-            //      "FROM <table>" and adds the outer-row filter
-            //   2. if regex also fails, log a WARN and let the original
-            //      SQL through (fail-soft). ADMIN/MANAGER have early-
-            //      returned above so they never reach this catch.
-            log.warn("[DataPermission] jsqlparser parse failed for user={}, table=unknown. " +
-                    "Falling back to regex. sql={}, error={}",
-                    principal.userId(), originalSql, e.getMessage());
+            log.warn("[DataPermission] SQL parse failed for user={}; attempting controlled fallback. error={}",
+                    principal.userId(), e.getMessage());
             String outerTable = tryRegexFallback(originalSql);
             if (outerTable != null) {
                 Expression injected = buildPermissionPredicate(outerTable, principal);
@@ -123,15 +138,15 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                     String newSql = injectWhere(originalSql, injected, outerTable);
                     if (newSql != null) {
                         PluginUtils.mpBoundSql(boundSql).sql(newSql);
-                        log.info("[DataPermission] Regex-fallback injected WHERE on table={} " +
-                                "for user={}", outerTable, principal.userId());
+                        log.info("[DataPermission] Regex fallback injected permission predicate. table={}, user={}",
+                                outerTable, principal.userId());
                         return;
                     }
                 }
             }
-            log.warn("[DataPermission] Regex-fallback FAILED for user={}. " +
-                    "Running original SQL UNFILTERED (fail-soft). table=unresolved, sql={}",
-                    principal.userId(), originalSql);
+            if (containsControlledTableReference(originalSql)) {
+                failClosed("unable to parse controlled-table query", e);
+            }
         }
     }
 
@@ -166,7 +181,7 @@ public class DataPermissionInterceptor implements InnerInterceptor {
     }
 
     /**
-     * Issue #19: regex-based fallback for queries jsqlparser can't parse
+     * Regex-based fallback for queries jsqlparser can't parse
      * (JOIN/UNION/CTE). Extracts the first table name after FROM, handling
      * aliases: for {@code FROM request r}, returns {@code request} not
      * {@code r}. Only returns a name that matches a known controlled table
@@ -194,11 +209,27 @@ public class DataPermissionInterceptor implements InnerInterceptor {
         return null;
     }
 
-    /**
-     * Known controlled tables for data permission filtering.
-     */
-    private static final java.util.Set<String> KNOWN_CONTROLLED_TABLES =
-            java.util.Set.of("request", "analysis_task", "report", "sample");
+    static boolean containsControlledTableReference(String sql) {
+        return sql != null && CONTROLLED_TABLE_REFERENCE.matcher(sql).find();
+    }
+
+    static long filterFailureCount() {
+        return FILTER_FAILURES.get();
+    }
+
+    private static void failClosed(String reason) {
+        long failureCount = FILTER_FAILURES.incrementAndGet();
+        log.error("[DataPermission] refusing unverified controlled-table query. reason={}, failures={}",
+                reason, failureCount);
+        throw new BusinessException(ErrorCode.DATA_PERMISSION_FILTER_FAILED, reason);
+    }
+
+    private static void failClosed(String reason, Exception cause) {
+        long failureCount = FILTER_FAILURES.incrementAndGet();
+        log.error("[DataPermission] refusing unverified controlled-table query. reason={}, failures={}, error={}",
+                reason, failureCount, cause.getMessage());
+        throw new BusinessException(ErrorCode.DATA_PERMISSION_FILTER_FAILED, reason);
+    }
 
     /**
      * Naive WHERE injector: if the SQL has no {@code WHERE} clause,
