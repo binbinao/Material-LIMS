@@ -96,7 +96,20 @@
 | **PUT** | `/api/v1/departments/{id}` | Put /{id} |
 | **DEL** | `/api/v1/departments/{id}` | Delete /{id} |
 
-## 7. Equipment Repair
+## 7. Equipment Calibration
+
+**Base**: `/api/v1/equipment-calibrations`
+
+> 设备校准管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/equipment-calibrations/equipment/{equipmentId}` | Get calibration history for equipment |
+| **GET** | `/api/v1/equipment-calibrations/equipment/{equipmentId}/valid` | Check if equipment calibration is valid |
+| **GET** | `/api/v1/equipment-calibrations/expiring` | Get calibrations expiring soon |
+| **POST** | `/api/v1/equipment-calibrations` | Create calibration record |
+
+## 8. Equipment Repair
 
 **Base**: `/api/v1/equipment-repairs`
 
@@ -111,7 +124,7 @@
 | **PUT** | `/api/v1/equipment-repairs/{id}` | Put /{id} |
 | **DEL** | `/api/v1/equipment-repairs/{id}` | Delete /{id} |
 
-## 8. Equipment Management
+## 9. Equipment Management
 
 **Base**: `/api/v1/equipments`
 
@@ -126,7 +139,7 @@
 | **DEL** | `/api/v1/equipments/{id}` | Delete /{id} |
 | **PATCH** | `/api/v1/equipments/{id}/status` | Patch /{id}/status |
 
-## 9. External Integration
+## 10. External Integration
 
 **Base**: `/api/v1/external`
 
@@ -139,7 +152,7 @@
 | **GET** | `/api/v1/external/suppliers` | Search suppliers from supplier management system |
 | **GET** | `/api/v1/external/suppliers/{supplierCode}` | Get supplier detail by supplierCode |
 
-## 10. Holiday Management
+## 11. Holiday Management
 
 **Base**: `/api/v1/holidays`
 
@@ -157,7 +170,7 @@
 | **PUT** | `/api/v1/holidays/{id}` | Put /{id} |
 | **DEL** | `/api/v1/holidays/{id}` | Delete /{id} |
 
-## 11. i18n
+## 12. i18n
 
 **Base**: `/api/v1/i18n`
 
@@ -170,7 +183,7 @@
 | **POST** | `/api/v1/i18n/messages/batch` | Post /messages/batch |
 | **DEL** | `/api/v1/i18n/messages` | Delete /messages |
 
-## 12. Knowledge Hub
+## 13. Knowledge Hub
 
 **Base**: `/api/v1/knowledge-docs`
 
@@ -184,7 +197,7 @@
 | **PUT** | `/api/v1/knowledge-docs/{id}` | Put /{id} |
 | **DEL** | `/api/v1/knowledge-docs/{id}` | Delete /{id} |
 
-## 13. Report Management
+## 14. Report Management
 
 **Base**: `/api/v1/reports`
 
@@ -204,7 +217,7 @@
 | **POST** | `/api/v1/reports/{id}/sync` | Post /{id}/sync |
 | **POST** | `/api/v1/reports/requests/{requestId}/reports` | Post /requests/{requestId}/reports |
 
-## 14. Request Type Management
+## 15. Request Type Management
 
 **Base**: `/api/v1/request-types`
 
@@ -218,7 +231,7 @@
 | **PUT** | `/api/v1/request-types/{id}` | Put /{id} |
 | **DEL** | `/api/v1/request-types/{id}` | Delete /{id} |
 
-## 15. Request Management
+## 16. Request Management
 
 **Base**: `/api/v1/requests`
 
@@ -241,7 +254,7 @@
 | **POST** | `/api/v1/requests/{id}/submit` | Submit request for review |
 | **PUT** | `/api/v1/requests/tasks/{taskId}` | Update analysis task status |
 
-## 16. Data Sync
+## 17. Data Sync
 
 **Base**: `/api/v1/sync`
 
@@ -255,4 +268,4 @@
 
 ---
 
-📊 **统计**: 16 个 Controller · 105 个端点
+📊 **统计**: 17 个 Controller · 109 个端点
