@@ -254,7 +254,21 @@
 | **POST** | `/api/v1/requests/{id}/submit` | Submit request for review |
 | **PUT** | `/api/v1/requests/tasks/{taskId}` | Update analysis task status |
 
-## 17. Data Sync
+## 17. Sample Management
+
+**Base**: `/api/v1/samples`
+
+> 样品管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/samples/{id}` | Get sample by ID |
+| **GET** | `/api/v1/samples/request/{requestId}` | Get samples by request |
+| **POST** | `/api/v1/samples` | Receive a new sample |
+| **POST** | `/api/v1/samples/{id}/dispose` | Dispose a sample |
+| **POST** | `/api/v1/samples/{parentSampleId}/split` | Split a sample into a child |
+
+## 18. Data Sync
 
 **Base**: `/api/v1/sync`
 
@@ -268,4 +282,4 @@
 
 ---
 
-📊 **统计**: 17 个 Controller · 109 个端点
+📊 **统计**: 18 个 Controller · 114 个端点
