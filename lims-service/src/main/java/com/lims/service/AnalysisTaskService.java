@@ -76,8 +76,18 @@ public class AnalysisTaskService {
                             .eq(AnalysisTask::getRequestId, task.getRequestId())
                             .ne(AnalysisTask::getStatus, "COMPLETED"));
             if (pendingCount == 0) {
-                Request request = requestMapper.selectById(task.getRequestId());
-                advanceToApproval(request);
+                // Issue #75: Previously, completing the last task auto-advanced
+                // the request to APPROVING via advanceToApproval(), which
+                // requires MANAGER/ADMIN. An engineer completing their own
+                // final task would trigger ACCESS_DENIED and roll back the
+                // entire transaction — leaving the task permanently stuck.
+                //
+                // Fix: task completion and state advance are now decoupled.
+                // The engineer can always complete their own task. When all
+                // tasks are done, the request stays in REPORTING and a
+                // manager explicitly advances it to APPROVING via
+                // advanceToApproving().
+                log.info("All analysis tasks completed for request: requestId={}", task.getRequestId());
             }
         }
 
@@ -95,12 +105,23 @@ public class AnalysisTaskService {
     }
 
     /**
-     * 将委托推进至 APPROVING 状态，仅 MANAGER/ADMIN 可触发。
-     * 防止工程师完成任务后绕过经理审批直接进入审批阶段。
+     * 经理/管理员将委托从 REPORTING 推进至 APPROVING。
+     * <p>
+     * Issue #75: 此方法从 updateAnalysisTask 中拆出，使工程师完成最后
+     * 一个任务不再触发需要经理角色的状态推进，避免事务回滚。
+     *
+     * @param requestId 委托 ID
      */
-    private void advanceToApproval(Request request) {
-        if (request == null || !RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
-            return;
+    @Transactional(rollbackFor = Exception.class)
+    public void advanceToApproving(String requestId) {
+        Request request = requestMapper.selectById(requestId);
+        if (request == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
+        }
+        if (!RequestStatus.REPORTING.getValue().equals(request.getStatus())) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID,
+                    "Request must be REPORTING before it can be advanced to APPROVING (current="
+                            + request.getStatus() + ")");
         }
         JwtTokenProvider.AuthPrincipal principal = SecurityUtils.getCurrentPrincipal();
         if (principal == null
@@ -110,5 +131,6 @@ public class AnalysisTaskService {
         }
         request.setStatus(RequestStatus.APPROVING.getValue());
         requestMapper.updateById(request);
+        log.info("Advanced request to APPROVING: requestId={}", requestId);
     }
 }
