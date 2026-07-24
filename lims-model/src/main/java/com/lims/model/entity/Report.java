@@ -37,4 +37,9 @@ public class Report extends BaseEntity {
     private String rejectedBy;
     private LocalDateTime rejectedAt;
     private LocalDateTime submittedAt;
+
+    // Issue #82: E-signature fields (21 CFR Part 11)
+    private String signatureUserId;
+    private String signatureMeaning;
+    private LocalDateTime signedAt;
 }
