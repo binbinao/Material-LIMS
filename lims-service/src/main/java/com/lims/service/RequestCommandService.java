@@ -1,5 +1,6 @@
 package com.lims.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lims.common.exception.BusinessException;
 import com.lims.common.exception.ErrorCode;
 import com.lims.common.security.SecurityUtils;
@@ -7,6 +8,7 @@ import com.lims.dao.mapper.*;
 import com.lims.model.dto.AnalysisTaskAssignDTO;
 import com.lims.model.dto.RequestCreateDTO;
 import com.lims.model.entity.*;
+import com.lims.model.enums.ReportStatus;
 import com.lims.model.enums.RequestStatus;
 import com.lims.workflow.WorkflowService;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +42,7 @@ public class RequestCommandService {
     private final AnalysisTaskMapper analysisTaskMapper;
     private final AnalysisItemMapper analysisItemMapper;
     private final RequestTypeMapper requestTypeMapper;
+    private final ReportMapper reportMapper;
     private final WorkflowService workflowService;
     private final HolidayService holidayService;
 
@@ -262,6 +265,8 @@ public class RequestCommandService {
 
     /**
      * 完成委托：APPROVING → COMPLETED。仅 MANAGER/ADMIN 可操作。
+     * <p>
+     * Issue #76: 必须验证该委托至少存在一份 APPROVED 报告，否则不允许完成。
      */
     @Transactional(rollbackFor = Exception.class)
     public void completeRequest(String requestId) {
@@ -274,6 +279,16 @@ public class RequestCommandService {
                     "Request must be APPROVING before it can be completed (current=" + request.getStatus() + ")");
         }
         requireRequestRole("MANAGER", "ADMIN");
+
+        // Issue #76: verify at least one APPROVED report exists for this request.
+        long approvedCount = reportMapper.selectCount(
+                new LambdaQueryWrapper<Report>()
+                        .eq(Report::getRequestId, requestId)
+                        .eq(Report::getStatus, ReportStatus.APPROVED.getValue()));
+        if (approvedCount == 0) {
+            throw new BusinessException(ErrorCode.REQUEST_STATUS_INVALID,
+                    "Cannot complete a request without at least one APPROVED report");
+        }
 
         request.setStatus(RequestStatus.COMPLETED.getValue());
         requestMapper.updateById(request);
