@@ -62,8 +62,12 @@ const RequestKanban: React.FC = () => {
                       key={req.id}
                       size="small"
                       hoverable
-                      style={{ borderLeft: `3px solid ${statusColors[key]}` }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${req.requestNo} - ${req.partName || req.partNumber || ''}`}
+                      style={{ borderLeft: `3px solid ${statusColors[key]}`, cursor: 'pointer' }}
                       onClick={() => history.push(`/request/${req.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); history.push(`/request/${req.id}`); } }}
                     >
                       <div>
                         <Text strong>{req.requestNo}</Text>

@@ -3,30 +3,33 @@ import { ProTable } from '@ant-design/pro-components';
 import { Button, Modal, Form, Input, Select, DatePicker, Tag, App } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useRef, useState } from 'react';
-import { request } from '@umijs/max';
+import { request, useIntl } from '@umijs/max';
 
 const statusColors: Record<string, string> = { ACTIVE: 'green', UNDER_REPAIR: 'orange', DECOMMISSIONED: 'red' };
 
 const EquipmentList: React.FC = () => {
+  const intl = useIntl();
   const actionRef = useRef<any>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any>(null);
   const [form] = Form.useForm();
   const { message } = App.useApp();
 
+  const t = (id: string, defaultMessage: string) => intl.formatMessage({ id, defaultMessage });
+
   const columns: ProColumns<any>[] = [
-    { title: 'Name', dataIndex: 'name', width: 180 },
-    { title: 'Model', dataIndex: 'model', width: 120 },
-    { title: 'Serial No.', dataIndex: 'serialNumber', width: 130 },
-    { title: 'Status', dataIndex: 'status', width: 100, render: (_, r) => <Tag color={statusColors[r.status]}>{r.status}</Tag> },
-    { title: 'Location', dataIndex: 'location', width: 150, search: false },
-    { title: 'Purchase Date', dataIndex: 'purchaseDate', valueType: 'date', width: 120, search: false },
-    { title: 'Warranty Expiry', dataIndex: 'warrantyExpiry', valueType: 'date', width: 120, search: false },
+    { title: t('equipment.name', 'Name'), dataIndex: 'name', width: 180 },
+    { title: t('equipment.model', 'Model'), dataIndex: 'model', width: 120 },
+    { title: t('equipment.serialNumber', 'Serial No.'), dataIndex: 'serialNumber', width: 130 },
+    { title: t('equipment.status', 'Status'), dataIndex: 'status', width: 100, render: (_, r) => <Tag color={statusColors[r.status]}>{r.status}</Tag> },
+    { title: t('equipment.location', 'Location'), dataIndex: 'location', width: 150, search: false },
+    { title: t('equipment.purchaseDate', 'Purchase Date'), dataIndex: 'purchaseDate', valueType: 'date', width: 120, search: false },
+    { title: t('equipment.warrantyExpiry', 'Warranty Expiry'), dataIndex: 'warrantyExpiry', valueType: 'date', width: 120, search: false },
     {
-      title: 'Action', valueType: 'option', width: 120,
+      title: t('common.action', 'Action'), valueType: 'option', width: 120,
       render: (_, record) => [
-        <a key="edit" onClick={() => { setEditingRecord(record); form.setFieldsValue(record); setModalVisible(true); }}>Edit</a>,
-        <a key="status" onClick={() => handleStatusChange(record)}>Change Status</a>,
+        <a key="edit" role="button" aria-label={t('common.edit', 'Edit')} onClick={() => { setEditingRecord(record); form.setFieldsValue(record); setModalVisible(true); }}>{t('common.edit', 'Edit')}</a>,
+        <a key="status" role="button" aria-label={t('equipment.changeStatus', 'Change Status')} onClick={() => handleStatusChange(record)}>{t('equipment.changeStatus', 'Change Status')}</a>,
       ],
     },
   ];
