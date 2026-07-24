@@ -1,7 +1,7 @@
 # API 接口速查表
 
 > 🤖 此文件由 `scripts/doc-updater.mjs` 自动生成
-> 📅 最后更新：2026-06-24
+> 📅 最后更新：2026-07-24
 > 📦 扫描目录：`lims-web/src/main/java/com/lims/web/controller/`
 
 ## 1. Admin
@@ -232,6 +232,7 @@
 | **GET** | `/api/v1/requests/{id}/workflow` | Get workflow status for a request |
 | **GET** | `/api/v1/requests/my-tasks` | Get my pending workflow tasks |
 | **POST** | `/api/v1/requests` | Create a new request |
+| **POST** | `/api/v1/requests/{id}/advance-to-approving` | Manager advances request to approval phase |
 | **POST** | `/api/v1/requests/{id}/assign` | Manager assigns engineers to request |
 | **POST** | `/api/v1/requests/{id}/complete` | Complete request |
 | **POST** | `/api/v1/requests/{id}/receive-sample` | Receive sample for request |
@@ -254,4 +255,4 @@
 
 ---
 
-📊 **统计**: 16 个 Controller · 104 个端点
+📊 **统计**: 16 个 Controller · 105 个端点
