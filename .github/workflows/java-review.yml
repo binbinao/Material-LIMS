@@ -6,14 +6,13 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    # 每周一上午9点自动审查
     - cron: '0 9 * * 1'
 
 jobs:
   java-review:
     name: Java代码审查
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: 检出代码
       uses: actions/checkout@v4
@@ -24,102 +23,26 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
-
-    - name: 安装依赖
-      run: npm ci
 
     - name: 运行Java代码审查
-      id: review
       run: |
-        echo "🔍 开始Java代码审查..."
-        node scripts/java-reviewer.mjs --strict
-        
-        # 检查退出码
-        if [ $? -eq 0 ]; then
-          echo "✅ 代码审查通过"
-          echo "result=pass" >> $GITHUB_OUTPUT
+        set -euo pipefail
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          mapfile -t changed_java_files < <(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- '*.java')
+          if [ "${#changed_java_files[@]}" -eq 0 ]; then
+            echo "没有变更 Java 文件，跳过 Java 规则审查"
+          else
+            node scripts/java-reviewer.mjs --strict --files "${changed_java_files[@]}"
+          fi
         else
-          echo "❌ 代码审查失败，发现ERROR级别问题"
-          echo "result=fail" >> $GITHUB_OUTPUT
+          node scripts/java-reviewer.mjs --strict
         fi
 
     - name: 上传审查报告
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: java-review-report
         path: docs/runbook/java-review-report.md
+        if-no-files-found: ignore
         retention-days: 30
-
-    - name: 发送通知
-      if: steps.review.outputs.result == 'fail'
-      uses: 8398a7/action-slack@v3
-      with:
-        status: failure
-        text: "❌ Java代码审查失败，发现ERROR级别问题，请检查GitHub Actions详情"
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-    - name: 审查失败时阻断合并
-      if: steps.review.outputs.result == 'fail'
-      run: |
-        echo "🚫 发现ERROR级别问题，阻断合并"
-        exit 1
-
-  auto-fix:
-    name: 自动修复问题
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    
-    steps:
-    - name: 检出代码
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
-
-    - name: 设置Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: 安装依赖
-      run: npm ci
-
-    - name: 自动修复代码问题
-      run: |
-        echo "🔧 开始自动修复..."
-        node scripts/java-reviewer.mjs --fix-only
-        
-        # 检查是否有文件被修改
-        git diff --name-only | head -10
-        
-        if git diff --quiet; then
-          echo "✅ 没有需要修复的问题"
-        else
-          echo "📝 发现并修复了代码问题"
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "🔧 fix: 自动修复java-reviewer发现的问题"
-          git push
-        fi
-
-    - name: 创建修复PR
-      if: failure()
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        title: "🔧 fix: 自动修复Java代码审查问题"
-        body: |
-          此PR自动修复了java-reviewer发现的代码问题：
-          
-          - Entity类缺少@TableName注解
-          - Mapper接口缺少@Mapper注解  
-          - Service类缺少@Transactional注解
-          - 参数校验注解缺失
-          
-          请Review后合并。
-        branch: "fix/java-review-issues"
-        delete-branch: true

@@ -28,7 +28,7 @@ describe('EquipmentRepairs buttons', () => {
   it('renders Complete and Delete actions', async () => {
     renderWithProviders(<EquipmentRepairs />);
     await waitFor(() => {
-      expect(screen.getByText('Complete')).toBeInTheDocument();
+      expect(screen.getByText('Complete Repair')).toBeInTheDocument();
       expect(screen.getByText('Delete')).toBeInTheDocument();
     });
   });

@@ -18,6 +18,6 @@ public interface ReportMapper extends BaseMapper<Report> {
      * those belong to a separate namespace and should never collide
      * with the auto-generated rpt-NNN counter.
      */
-    @Select("SELECT COALESCE(MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)), 0) FROM report WHERE id ~ '^rpt-[0-9]+$'")
-    int selectMaxNumericReportId();
+    @Select("SELECT nextval('report_id_seq')")
+    long nextReportNumber();
 }
