@@ -280,7 +280,7 @@
 | **POST** | `/api/v1/sync/departments` | Post /departments |
 | **POST** | `/api/v1/sync/users` | Post /users |
 
-## 17. Test Results
+## 19. Test Results
 
 **Base**: `/api/v1/test-results`
 
@@ -295,4 +295,4 @@
 
 ---
 
-📊 **统计**: 18 个 Controller · 114 个端点
+📊 **统计**: 19 个 Controller · 118 个端点
