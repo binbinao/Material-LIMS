@@ -61,7 +61,8 @@ const EquipmentList: React.FC = () => {
           try {
             const res = await request('/api/v1/equipments', { params: { page: params.current, size: params.pageSize, status: params.status } });
             return { data: res?.data?.records ?? [], total: res?.data?.total ?? 0, success: res?.code === 200 };
-          } catch {
+          } catch (err) {
+            message.error('Failed to load equipment list');
             return { data: [], total: 0, success: false };
           }
         }}

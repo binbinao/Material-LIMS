@@ -88,6 +88,7 @@ const KnowledgeList: React.FC = () => {
             });
             return { data: r?.data?.records ?? [], total: r?.data?.total ?? 0, success: r?.code === 200 };
           } catch {
+            message.error(intl.formatMessage({ id: 'common.loadFailed', defaultMessage: 'Failed to load data' }));
             return { data: [], total: 0, success: false };
           }
         }}

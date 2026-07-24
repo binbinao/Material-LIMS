@@ -1,12 +1,13 @@
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Tag, Button } from 'antd';
+import { Tag, Button, App } from 'antd';
 import { useRef } from 'react';
 import { history } from '@umijs/max';
 import { getReports } from '@/services/requestService';
 
 const ReportArchive: React.FC = () => {
   const actionRef = useRef<any>();
+  const { message } = App.useApp();
 
   const columns: ProColumns<API.Report>[] = [
     {
@@ -45,6 +46,7 @@ const ReportArchive: React.FC = () => {
             success: result?.code === 200,
           };
         } catch {
+          message.error('Failed to load archived reports');
           return { data: [], total: 0, success: false };
         }
       }}

@@ -7,14 +7,17 @@ import dayjs from 'dayjs';
 
 const { Text } = Typography;
 
-const statusKeys = ['SUBMITTED', 'ASSIGNED', 'REPORTING', 'APPROVING', 'COMPLETED'] as const;
+const statusKeys = ['DRAFT', 'SUBMITTED', 'ASSIGNED', 'SAMPLING', 'REPORTING', 'APPROVING', 'COMPLETED', 'REJECTED'] as const;
 
 const statusColors: Record<string, string> = {
+  DRAFT: '#8c8c8c',
   SUBMITTED: '#1890ff',
   ASSIGNED: '#722ed1',
+  SAMPLING: '#13c2c2',
   REPORTING: '#fa8c16',
   APPROVING: '#eb2f96',
   COMPLETED: '#52c41a',
+  REJECTED: '#f5222d',
 };
 
 const RequestKanban: React.FC = () => {
@@ -40,11 +43,11 @@ const RequestKanban: React.FC = () => {
   return (
     <PageContainer title={intl.formatMessage({ id: 'menu.request.kanban' })}>
       <Spin spinning={loading}>
-        <Row gutter={12}>
+        <Row gutter={[12, 12]} style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
           {statusKeys.map((key) => {
             const items = requests.filter((r: any) => r.status === key);
             return (
-              <Col span={4} key={key}>
+              <Col flex="220px" key={key}>
                 <div style={{ marginBottom: 8 }}>
                   <Badge count={items.length} style={{ backgroundColor: statusColors[key] }}>
                     <Text strong style={{ fontSize: 14 }}>
