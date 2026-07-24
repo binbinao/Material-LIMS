@@ -253,6 +253,19 @@
 | **POST** | `/api/v1/sync/departments` | Post /departments |
 | **POST** | `/api/v1/sync/users` | Post /users |
 
+## 17. Test Results
+
+**Base**: `/api/v1/test-results`
+
+> 检测结果管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| **GET** | `/api/v1/test-results/request/{requestId}` | Get results by request |
+| **GET** | `/api/v1/test-results/task/{taskId}` | Get results by analysis task |
+| **POST** | `/api/v1/test-results` | Create test result |
+| **POST** | `/api/v1/test-results/{id}/review` | Review test result |
+
 ---
 
-📊 **统计**: 16 个 Controller · 105 个端点
+📊 **统计**: 17 个 Controller · 109 个端点
