@@ -19,7 +19,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -72,6 +75,10 @@ public class AuditLogAspect {
 
             entity.setDetail(serializeArgs(joinPoint));
             entity.setCreatedAt(LocalDateTime.now());
+
+            // Issue #82: Compute tamper-evident hash of the audit entry
+            entity.setEntryHash(computeHash(entity));
+
             auditLogMapper.insert(entity);
         } catch (Exception e) {
             log.warn("Failed to record audit log", e);
@@ -136,4 +143,22 @@ public class AuditLogAspect {
             return "{\"_serializeError\":\"" + e.getClass().getSimpleName() + "\"}";
         }
     }
+
+    /** Issue #82: Compute SHA-256 hash for tamper-evidence. */
+    private String computeHash(AuditLog entity) {
+        try {
+            String content = String.join("|",
+                    nz(entity.getUserId()), nz(entity.getModule()), nz(entity.getAction()),
+                    nz(entity.getEntityId()), nz(entity.getDetail()),
+                    entity.getCreatedAt() != null ? entity.getCreatedAt().toString() : "");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(content.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            log.warn("Failed to compute audit hash", e);
+            return null;
+        }
+    }
+
+    private static String nz(String s) { return s != null ? s : ""; }
 }
