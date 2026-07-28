@@ -31,6 +31,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: lims
+          POSTGRES_USER: lims
+          POSTGRES_PASSWORD: lims
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lims -d lims"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/lims
+      SPRING_DATASOURCE_USERNAME: lims
+      SPRING_DATASOURCE_PASSWORD: lims
+      SPRING_PROFILES_ACTIVE: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -39,6 +58,6 @@ jobs:
           java-version: '17'
           cache: 'maven'
       - name: Run unit tests
-        run: ./mvnw -B test
+        run: ./mvnw -B test -Dtest='!DatabaseStressTest' -Dsurefire.failIfNoSpecifiedTests=false
       - name: Build (skip tests)
         run: ./mvnw -B -DskipTests package

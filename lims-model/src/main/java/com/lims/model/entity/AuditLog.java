@@ -17,4 +17,12 @@ public class AuditLog {
     private String detail;
     private String ip;
     private LocalDateTime createdAt;
+
+    // Issue #82: Immutable audit trail fields
+    private String beforeValue;
+    private String afterValue;
+    private String entryHash;
+    private String signatureUserId;
+    private String signatureMeaning;
+    private LocalDateTime signedAt;
 }

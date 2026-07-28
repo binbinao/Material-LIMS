@@ -1,24 +1,33 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { Card, Col, Row, Tag, Typography, Badge, Empty, Spin } from 'antd';
 import { useRequest } from 'ahooks';
-import { history } from '@umijs/max';
+import { history, useIntl } from '@umijs/max';
 import { getRequests } from '@/services/requestService';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
 
-const statusColumns = [
-  { key: 'SUBMITTED', title: 'Submitted', color: '#1890ff' },
-  { key: 'ASSIGNED', title: 'Assigned', color: '#722ed1' },
-  { key: 'REPORTING', title: 'Reporting', color: '#fa8c16' },
-  { key: 'APPROVING', title: 'Approving', color: '#eb2f96' },
-  { key: 'COMPLETED', title: 'Completed', color: '#52c41a' },
-];
+const statusKeys = ['DRAFT', 'SUBMITTED', 'ASSIGNED', 'SAMPLING', 'REPORTING', 'APPROVING', 'COMPLETED', 'REJECTED'] as const;
+
+const statusColors: Record<string, string> = {
+  DRAFT: '#8c8c8c',
+  SUBMITTED: '#1890ff',
+  ASSIGNED: '#722ed1',
+  SAMPLING: '#13c2c2',
+  REPORTING: '#fa8c16',
+  APPROVING: '#eb2f96',
+  COMPLETED: '#52c41a',
+  REJECTED: '#f5222d',
+};
 
 const RequestKanban: React.FC = () => {
+  const intl = useIntl();
   const { data, loading } = useRequest(() => getRequests({ page: 0, size: 200 }));
 
   const requests = data?.data?.records ?? [];
+
+  const getStatusLabel = (status: string) =>
+    intl.formatMessage({ id: `request.status.${status}`, defaultMessage: status });
 
   const getDueDateColor = (dueDate: string) => {
     if (!dueDate) return 'default';
@@ -32,17 +41,17 @@ const RequestKanban: React.FC = () => {
   };
 
   return (
-    <PageContainer title="Request Kanban">
+    <PageContainer title={intl.formatMessage({ id: 'menu.request.kanban' })}>
       <Spin spinning={loading}>
-        <Row gutter={12}>
-          {statusColumns.map((col) => {
-            const items = requests.filter((r: any) => r.status === col.key);
+        <Row gutter={[12, 12]} style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
+          {statusKeys.map((key) => {
+            const items = requests.filter((r: any) => r.status === key);
             return (
-              <Col span={4} key={col.key}>
+              <Col flex="220px" key={key}>
                 <div style={{ marginBottom: 8 }}>
-                  <Badge count={items.length} style={{ backgroundColor: col.color }}>
+                  <Badge count={items.length} style={{ backgroundColor: statusColors[key] }}>
                     <Text strong style={{ fontSize: 14 }}>
-                      {col.title}
+                      {getStatusLabel(key)}
                     </Text>
                   </Badge>
                 </div>
@@ -53,8 +62,12 @@ const RequestKanban: React.FC = () => {
                       key={req.id}
                       size="small"
                       hoverable
-                      style={{ borderLeft: `3px solid ${col.color}` }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${req.requestNo} - ${req.partName || req.partNumber || ''}`}
+                      style={{ borderLeft: `3px solid ${statusColors[key]}`, cursor: 'pointer' }}
                       onClick={() => history.push(`/request/${req.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); history.push(`/request/${req.id}`); } }}
                     >
                       <div>
                         <Text strong>{req.requestNo}</Text>

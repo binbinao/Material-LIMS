@@ -40,11 +40,11 @@ class OwnershipCheckTest {
     @Test
     void requestServiceUpdateAnalysisTaskAssertsOwnership() throws Exception {
         String content = readSource(
-                "lims-service/src/main/java/com/lims/service/RequestService.java");
+                "lims-service/src/main/java/com/lims/service/AnalysisTaskService.java");
         // Find the method body by walking braces from the signature.
         String body = findMethodBody(content, "updateAnalysisTask");
         assertTrue(!body.isEmpty(),
-                "Expected to find updateAnalysisTask method in RequestService");
+                "Expected to find updateAnalysisTask method in AnalysisTaskService");
         boolean throwsOnMismatch = body.contains("BusinessException")
                 || body.contains("OPERATION_NOT_ALLOWED")
                 || body.contains("ACCESS_DENIED");

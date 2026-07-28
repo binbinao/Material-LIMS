@@ -1,0 +1,97 @@
+// 使用CSS变量替代less变量
+// 移除antd主题导入，使用CSS自定义属性
+
+.logoutButton {
+  // 基础样式
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  
+  &.floating {
+    // 浮动定位样式
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    
+    // 响应式设计
+    @media (max-width: 768px) {
+      left: 16px;
+      bottom: 16px;
+    }
+    
+    @media (max-width: 480px) {
+      left: 12px;
+      bottom: 12px;
+    }
+    
+    // 动画效果
+    animation: floatIn 0.3s ease-out;
+    
+    @keyframes floatIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  }
+  
+  .button {
+    // Material Design风格
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    // 悬停效果
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      transform: translateY(-1px);
+    }
+    
+    // 激活效果
+    &:active {
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      transform: translateY(0);
+    }
+    
+    // 焦点样式
+    &:focus {
+      outline: 2px solid var(--ant-primary-color);
+      outline-offset: 2px;
+    }
+    
+    // 禁用样式
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+  }
+  
+  .tooltip {
+    // 工具提示样式
+    .ant-tooltip-inner {
+      border-radius: 6px;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+  }
+}
+
+// 深色主题支持
+[data-theme='dark'] {
+  .logoutButton {
+    .button {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 package com.lims.service.storage;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
@@ -175,8 +177,11 @@ public class FileStorageService {
     }
 
     /**
-     * 上传文件，返回访问 URL（MinIO 预签名或 file://）
+     * 上传文件，返回访问 URL（MinIO 预签名或 file://）。
+     * 受 Resilience4j 熔断器保护：3 次重试后若仍失败，熔断器打开 60s 直接走本地 fallback。
      */
+    @CircuitBreaker(name = "fileStorage", fallbackMethod = "uploadFallback")
+    @Retry(name = "fileStorage")
     public String upload(Path source, String objectKeyPrefix) {
         String rawName = source.getFileName().toString();
         assertAllowedExtension(rawName);
@@ -217,6 +222,25 @@ public class FileStorageService {
             return target.toUri().toString();
         } catch (IOException e) {
             throw new RuntimeException("Local file storage failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Resilience4j 熔断器降级：MinIO 不可用或重试耗尽时，直接写入本地文件系统。
+     */
+    @SuppressWarnings("unused")
+    private String uploadFallback(Path source, String objectKeyPrefix, Throwable t) {
+        log.warn("Circuit breaker fallback for upload ({}), writing to local filesystem", t.getMessage());
+        String rawName = source.getFileName().toString();
+        String safeName = sanitizeFilename(rawName);
+        String objectName = objectKeyPrefix + "/" + UUID.randomUUID() + "_" + safeName;
+        try {
+            Path target = Paths.get(localBase).resolve(objectName.replace('/', '_'));
+            Files.createDirectories(target.getParent());
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            return target.toUri().toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Local file storage fallback failed: " + e.getMessage(), e);
         }
     }
 }

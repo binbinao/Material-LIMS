@@ -1,51 +1,52 @@
 import { PageContainer } from '@ant-design/pro-components';
-import { Card, Table, Tag, App } from 'antd';
-import { useParams, history } from '@umijs/max';
+import { Card, Table, Tag } from 'antd';
+import { useParams, history, useIntl } from '@umijs/max';
 import { useRequest } from 'ahooks';
 import { getReportRevisions } from '@/services/requestService';
 import dayjs from 'dayjs';
 
-const reportStatusMap: Record<string, { color: string; text: string }> = {
-  DRAFT: { color: 'default', text: 'Draft' },
-  IN_REVIEW: { color: 'processing', text: 'In Review' },
-  APPROVED: { color: 'success', text: 'Approved' },
-  REVISING: { color: 'warning', text: 'Revising' },
-};
-
 const ReportRevisions: React.FC = () => {
   const params = useParams<{ id: string }>();
+  const intl = useIntl();
 
   const { data, loading } = useRequest(() => getReportRevisions(params.id));
   const revisions = data?.data ?? [];
 
+  const getStatusText = (s: string) =>
+    intl.formatMessage({ id: `report.status.${s}`, defaultMessage: s });
+
+  const statusColor: Record<string, string> = {
+    DRAFT: 'default', IN_REVIEW: 'processing', APPROVED: 'success', REVISING: 'warning',
+  };
+
   const columns = [
     {
-      title: 'Version', dataIndex: 'versionNumber', width: 100,
+      title: intl.formatMessage({ id: 'report.label.version', defaultMessage: 'Version' }), dataIndex: 'versionNumber', width: 100,
       render: (v: string, record: API.Report) => <a onClick={() => history.push(`/report/${record.id}`)}>{v}</a>,
     },
     {
-      title: 'Status', dataIndex: 'status', width: 120,
-      render: (v: string) => <Tag color={reportStatusMap[v]?.color}>{reportStatusMap[v]?.text || v}</Tag>,
+      title: intl.formatMessage({ id: 'report.label.status', defaultMessage: 'Status' }), dataIndex: 'status', width: 120,
+      render: (v: string) => <Tag color={statusColor[v]}>{getStatusText(v)}</Tag>,
     },
-    { title: 'Revision Note', dataIndex: 'revisionNote', ellipsis: true },
-    { title: 'Author', dataIndex: 'authorId', width: 120 },
+    { title: intl.formatMessage({ id: 'report.label.revisionNote', defaultMessage: 'Revision Note' }), dataIndex: 'revisionNote', ellipsis: true },
+    { title: intl.formatMessage({ id: 'report.label.author', defaultMessage: 'Author' }), dataIndex: 'authorId', width: 120 },
     {
-      title: 'Approved By', dataIndex: 'approvedBy', width: 120,
+      title: intl.formatMessage({ id: 'report.label.approvedBy', defaultMessage: 'Approved By' }), dataIndex: 'approvedBy', width: 120,
       render: (v: string) => v || '-',
     },
     {
-      title: 'Approved At', dataIndex: 'approvedAt', width: 160,
+      title: intl.formatMessage({ id: 'report.label.approvedAt', defaultMessage: 'Approved At' }), dataIndex: 'approvedAt', width: 160,
       render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: 'Created', dataIndex: 'createdAt', width: 160,
+      title: intl.formatMessage({ id: 'report.label.created', defaultMessage: 'Created' }), dataIndex: 'createdAt', width: 160,
       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
     },
   ];
 
   return (
     <PageContainer
-      title="Report Revisions"
+      title={intl.formatMessage({ id: 'report.revisions.title' })}
       onBack={() => history.push(`/report/${params.id}`)}
     >
       <Card>

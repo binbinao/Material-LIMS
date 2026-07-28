@@ -42,6 +42,9 @@ public class ReportService {
     private final WordToPdfConverter wordToPdfConverter;
     private final FileStorageService fileStorageService;
 
+    @org.springframework.beans.factory.annotation.Value("${lims.demo.enabled:false}")
+    private boolean demoEnabled;
+
     public Page<Report> list(int page, int size, String status, String requestId) {
         LambdaQueryWrapper<Report> wrapper = new LambdaQueryWrapper<>();
         if (status != null) wrapper.eq(Report::getStatus, status);
@@ -95,14 +98,8 @@ public class ReportService {
         report.setAuthorId(authorId);
         report.setVersionNumber("V1.0");
         report.setStatus(ReportStatus.DRAFT.getValue());
-        // Stamp a sequential "rpt-NNN" id before insert. The Report
-        // entity overrides BaseEntity's ASSIGN_UUID with IdType.INPUT
-        // so MyBatis-Plus does not overwrite this value, and the
-        // V10 CHECK constraint enforces the rpt-* prefix at the DB
-        // layer (catches future regressions). Race window between
-        // SELECT-MAX and INSERT is acceptable for a dev env; in
-        // production we'd switch to a Postgres SEQUENCE.
-        report.setId("rpt-" + String.format("%03d", reportMapper.selectMaxNumericReportId() + 1));
+        // Stamp a sequential "rpt-NNN" id atomically through PostgreSQL.
+        report.setId("rpt-" + String.format("%03d", reportMapper.nextReportNumber()));
         reportMapper.insert(report);
 
         try {
@@ -173,9 +170,15 @@ public class ReportService {
         report.setStatus(ReportStatus.APPROVED.getValue());
         report.setApprovedBy(managerId);
         report.setApprovedAt(LocalDateTime.now());
+
+        // Issue #82: Record e-signature for 21 CFR Part 11 compliance
+        report.setSignatureUserId(managerId);
+        report.setSignatureMeaning("I approve this report as accurate and complete");
+        report.setSignedAt(LocalDateTime.now());
+
         reportMapper.updateById(report);
 
-        log.info("Approved report: reportId={}, approvedBy={}", reportId, managerId);
+        log.info("Approved report with e-signature: reportId={}, approvedBy={}", reportId, managerId);
     }
 
     /**
@@ -264,18 +267,16 @@ public class ReportService {
 
     /**
      * Generate a randomized sample .docx for the report and return it as
-     * a byte array. The content is built on the fly with Apache POI (no
-     * template file needed) and uses {@link ThreadLocalRandom} so each
-     * call produces a different sample — different analysis methods,
-     * different result values, different pass/fail conclusion.
+     * a byte array.
      *
-     * Intended for the dev environment and the E2E demo: even reports
-     * without a real {@code file_url} (e.g. seeded rows where
-     * {@code file_url} is a placeholder string like
-     * "/reports/rpt-001/V1.1.docx") can be downloaded. The download
-     * endpoint exposes this method; see ReportController.sampleWord.
+     * Issue #84: Restricted to dev/demo profile. In production, calling
+     * this method throws to prevent fake business data from leaking.
      */
     public byte[] getSampleWordBytes(String reportId) {
+        if (!demoEnabled) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED,
+                    "Sample word generation is only available in dev/demo mode");
+        }
         Report report = reportMapper.selectById(reportId);
         if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
         try (XWPFDocument doc = new XWPFDocument();
@@ -291,14 +292,19 @@ public class ReportService {
 
 
     /**
-     * Sync report content from SharePoint (placeholder until SharePoint is wired)
+     * Sync report content from SharePoint.
+     *
+     * Issue #84: In production, throws instead of silently no-op'ing.
      */
     @Transactional(rollbackFor = Exception.class)
     public void syncFromSharePoint(String reportId) {
         Report report = reportMapper.selectById(reportId);
         if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
-        log.info("Sync from SharePoint requested: reportId={} (no-op until SharePoint integration is enabled)",
-                reportId);
+        if (!demoEnabled) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED,
+                    "SharePoint sync is not configured in this environment");
+        }
+        log.info("Sync from SharePoint requested: reportId={}", reportId);
     }
 
     private void validateReportOwnership(Report report, String reportId, String userId) {

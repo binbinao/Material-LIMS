@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import enUS from '@/locales/en-US';
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -32,7 +33,13 @@ jest.mock('@umijs/max', () => {
   return {
     history: mockHistory,
     useIntl: () => ({
-      formatMessage: ({ id }: { id: string }) => id,
+      formatMessage: ({ id, defaultMessage }: { id: string; defaultMessage?: string }, values?: Record<string, unknown>) => {
+        const template = String(enUS[id as keyof typeof enUS] ?? defaultMessage ?? id);
+        return Object.entries(values ?? {}).reduce(
+          (message, [key, value]) => message.replace(`{${key}}`, String(value)),
+          template,
+        );
+      },
     }),
     useParams: jest.fn(() => ({ id: 'req-001' })),
     useModel: jest.fn(() => ({

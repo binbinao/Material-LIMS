@@ -21,7 +21,7 @@ describe('KnowledgeList buttons', () => {
     renderWithProviders(<KnowledgeList />);
     await waitFor(() => expect(screen.getByRole('button', { name: /Upload/i })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /Upload/i }));
-    await waitFor(() => expect(screen.getByText(/Upload Knowledge|Upload Document/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('Upload Knowledge Document'));
   });
 
   it('renders Delete action', async () => {

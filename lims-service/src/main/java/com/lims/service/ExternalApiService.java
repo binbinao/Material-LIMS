@@ -56,7 +56,7 @@ public class ExternalApiService {
 
     public List<Map<String, Object>> searchPartsFallback(String keyword, Throwable t) {
         log.warn("partsearch fallback: keyword={}, err={}", keyword, t.getMessage());
-        return mockParts(keyword);
+        return mockEnabled ? mockParts(keyword) : List.of();
     }
 
     @Cacheable(value = "partDetail", key = "#partNumber", unless = "#result == null")
@@ -74,7 +74,7 @@ public class ExternalApiService {
 
     public Map<String, Object> getPartDetailFallback(String partNumber, Throwable t) {
         log.warn("partDetail fallback: partNumber={}, err={}", partNumber, t.getMessage());
-        return mockPartDetail(partNumber);
+        return mockEnabled ? mockPartDetail(partNumber) : null;
     }
 
     @CircuitBreaker(name = "supplierService", fallbackMethod = "searchSuppliersFallback")
@@ -92,7 +92,7 @@ public class ExternalApiService {
 
     public List<Map<String, Object>> searchSuppliersFallback(String keyword, Throwable t) {
         log.warn("supplierSearch fallback: keyword={}, err={}", keyword, t.getMessage());
-        return mockSuppliers(keyword);
+        return mockEnabled ? mockSuppliers(keyword) : List.of();
     }
 
     @Cacheable(value = "supplierDetail", key = "#supplierCode", unless = "#result == null")
@@ -110,7 +110,7 @@ public class ExternalApiService {
 
     public Map<String, Object> getSupplierDetailFallback(String supplierCode, Throwable t) {
         log.warn("supplierDetail fallback: supplierCode={}, err={}", supplierCode, t.getMessage());
-        return mockSupplierDetail(supplierCode);
+        return mockEnabled ? mockSupplierDetail(supplierCode) : null;
     }
 
     /* --------- mock --------- */

@@ -142,6 +142,64 @@ Sequence: create request (DRAFT) → start process → submit → Manager `/assi
 
 Configuration is environment-variable driven (`${DB_HOST:localhost}` style) — never hardcode production values in `application*.yml`. Only `application-dev.yml` may carry localhost defaults.
 
+## ECC Skills — Mandatory Project Rules 🛡️
+
+> **核心原则：做任何变更前，必须先检查以下 ECC Skill 是否适用于当前场景。如果能用，必须严格遵循。**
+
+这些 ECC Skill 是经过项目上下文评估后选定的强制规范，非可选建议。违反这些规则等同于违反项目编码规范。
+
+### 变更前必查清单（按变更类型）
+
+在做以下类型的变更时，**必须**在动手前加载对应的 ECC Skill：
+
+| 变更类型 | 必用 Skill | 触发条件 | 作用 |
+|----------|-----------|----------|------|
+| **后端代码（任何 Java 文件）** | `springboot-patterns` | 编写/修改 Controller, Service, Mapper, Config | 架构模式、分层规范、命名约定 |
+| **后端功能开发 / Bug 修复** | `springboot-tdd` | 新增功能、修复 bug、重构 | JUnit 5 + Mockito + Testcontainers TDD |
+| **后端 PR / 发布前** | `springboot-verification` | 提交 PR、准备发布 | 构建 + 静态分析 + 测试覆盖率 + 安全检查 |
+| **认证 / 鉴权 / 安全相关** | `springboot-security` + `security-review` | 修改 auth、权限、用户输入、密钥 | 认证鉴权最佳实践 + 全面安全检查表 |
+| **前端组件 / 页面开发** | `react-patterns` + `react-testing` | 编写/修改 React 组件、hooks、页面 | 组件模式 + RTL/Vitest 测试 |
+| **前端性能优化** | `react-performance` | 优化渲染、减小包体积、改进加载速度 | 70+ 条性能规则，分 8 个优先级 |
+| **数据库 Schema / 查询** | `postgres-patterns` | 修改 schema.sql、写 SQL、加索引 | PG 查询优化、索引策略、Schema 设计 |
+| **E2E 测试** | `e2e-testing` + `webapp-testing` | 编写/修改 Playwright 测试 | Page Object Model + 浏览器交互验证 |
+| **代码健康检查** | `codehealth-mcp` | 重构前检查、提交前审查 | CodeScene 代码健康扫描 |
+| **任何新功能开发** | `tdd-workflow` | 从零开发新功能 | 80%+ 覆盖率 TDD：单元 + 集成 + E2E |
+
+### 执行流程
+
+```
+变更请求
+  │
+  ├─ 1. 识别变更类型（后端/前端/数据库/安全/E2E）
+  ├─ 2. 查上表 → 确定必用 Skill
+  ├─ 3. use_skill("<skill-name>") 加载 Skill
+  ├─ 4. 严格遵循 Skill 中的规范和模式
+  └─ 5. 变更完成后运行验证（springboot-verification / react-testing）
+```
+
+### 示例
+
+```
+# 要修改 RequestService.java
+→ 变更类型：后端代码
+→ 必用 Skill：springboot-patterns, springboot-tdd
+→ 先 use_skill("springboot-patterns") 确认架构模式
+→ 再 use_skill("springboot-tdd") 遵循 TDD 流程写测试
+→ 最后 use_skill("springboot-verification") 验证通过
+
+# 要优化前端列表页渲染性能
+→ 变更类型：前端性能优化
+→ 必用 Skill：react-performance, react-patterns
+→ 先 use_skill("react-performance") 获取 70+ 规则
+→ 再 use_skill("react-patterns") 确保组件模式正确
+
+# 要给数据库加新表
+→ 变更类型：数据库 Schema
+→ 必用 Skill：postgres-patterns
+→ 先 use_skill("postgres-patterns") 确认索引和查询设计
+→ 注意：本项目无物理外键，记得用逻辑外键！
+```
+
 ## Don't
 
 - Don't bump Spring Boot, Flowable, MyBatis-Plus, or Java major versions — `pom.xml` pins them

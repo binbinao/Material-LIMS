@@ -38,8 +38,8 @@ export function testCrudPageButtons({
       const user = userEvent.setup();
       renderWithProviders(<Component />);
 
-      await waitFor(() => expect(screen.getByText('common.create')).toBeInTheDocument());
-      await user.click(screen.getByText('common.create'));
+      await waitFor(() => expect(screen.getByText('Create')).toBeInTheDocument());
+      await user.click(screen.getByText('Create'));
       await waitFor(() => expect(screen.getByText(createOpensModalTitle)).toBeInTheDocument());
     });
 

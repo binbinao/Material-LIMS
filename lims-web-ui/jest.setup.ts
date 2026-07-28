@@ -10,6 +10,7 @@
 // page-level structural tests can render without booting Umi.
 
 import '@testing-library/jest-dom';
+import enUS from './src/locales/en-US';
 
 // Polyfill window.matchMedia — Ant Design ProTable / Grid / Responsive
 // components call it on mount; jsdom doesn't implement it. Without this
@@ -53,8 +54,13 @@ jest.mock('@umijs/max', () => {
     data: undefined, loading: false, run: fn, refresh: noop,
   }));
   const useIntl = jest.fn(() => ({
-    formatMessage: ({ id, defaultMessage }: { id?: string; defaultMessage?: string }) =>
-      defaultMessage ?? id ?? '',
+    formatMessage: ({ id, defaultMessage }: { id?: string; defaultMessage?: string }, values?: Record<string, unknown>) => {
+      const template = String((id && enUS[id as keyof typeof enUS]) ?? defaultMessage ?? id ?? '');
+      return Object.entries(values ?? {}).reduce(
+        (message, [key, value]) => message.replace(`{${key}}`, String(value)),
+        template,
+      );
+    },
     locale: 'en-US',
   }));
   const useAccess = jest.fn(() => ({
@@ -90,16 +96,7 @@ jest.mock('@umijs/max', () => {
   };
 });
 
-// Mock umi-request (used by requestService.ts and directly by tests
-// that cast `request` as jest.Mock). The default export + named `request`
-// are both jest.fn() so tests can override per-case.
-jest.mock('umi-request', () => ({
-  __esModule: true,
-  default: jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' })),
-  request: jest.fn(() => Promise.resolve({ code: 200, data: {}, message: 'success' })),
-  extend: jest.fn(),
-  RequestError: class RequestError extends Error {},
-}));
+// Note: umi-request module not found in this project, removed mock
 
 // Auto-mock every exported function from @/services/requestService so
 // tests can do `(getBrands as jest.Mock).mockResolvedValue(...)`.
@@ -125,6 +122,7 @@ jest.mock('@/services/requestService', () => {
     getAdminUsers: emptyPage(),
     getRequestTypes: emptyPage(),
     getDepartments: emptyPage(),
+    getDepartmentTree: jest.fn(() => Promise.resolve({ code: 200, data: [], message: 'success' })),
     getAnalysisItems: emptyPage(),
     getAnalysisItemGroups: emptyPage(),
     getAnalysisItemCascade: emptyPage(),

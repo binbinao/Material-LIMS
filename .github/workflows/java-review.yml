@@ -1,0 +1,48 @@
+name: Java Code Review
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 9 * * 1'
+
+jobs:
+  java-review:
+    name: Java代码审查
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 设置Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: 运行Java代码审查
+      run: |
+        set -euo pipefail
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          mapfile -t changed_java_files < <(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- '*.java')
+          if [ "${#changed_java_files[@]}" -eq 0 ]; then
+            echo "没有变更 Java 文件，跳过 Java 规则审查"
+          else
+            node scripts/java-reviewer.mjs --strict --files "${changed_java_files[@]}"
+          fi
+        else
+          node scripts/java-reviewer.mjs --strict
+        fi
+
+    - name: 上传审查报告
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: java-review-report
+        path: docs/runbook/java-review-report.md
+        if-no-files-found: ignore
+        retention-days: 30

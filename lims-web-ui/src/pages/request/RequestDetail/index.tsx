@@ -1,41 +1,17 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { Card, Descriptions, Tag, Button, Steps, Table, Modal, Form, Input, App, Divider, Space, Timeline, Select } from 'antd';
-import { useParams, history, useAccess } from '@umijs/max';
+import { useParams, history, useAccess, useIntl } from '@umijs/max';
 import { useRequest } from 'ahooks';
 import { useState } from 'react';
 import { getRequest, getRequestTasks, getRequestWorkflow, submitRequest, assignRequest, rejectRequest, receiveSample, startReporting, completeRequest, updateAnalysisTask, getAdminUsers, createReport } from '@/services/requestService';
 import dayjs from 'dayjs';
 
-const statusMap: Record<string, { color: string; text: string }> = {
-  DRAFT: { color: 'default', text: 'Draft' },
-  SUBMITTED: { color: 'processing', text: 'Submitted' },
-  ASSIGNED: { color: 'processing', text: 'Assigned' },
-  SAMPLING: { color: 'warning', text: 'Sampling' },
-  REPORTING: { color: 'warning', text: 'Reporting' },
-  APPROVING: { color: 'orange', text: 'Approving' },
-  COMPLETED: { color: 'success', text: 'Completed' },
-  REJECTED: { color: 'error', text: 'Rejected' },
-};
-
-const priorityMap: Record<string, { color: string; text: string }> = {
-  LOW: { color: 'default', text: 'Low' },
-  NORMAL: { color: 'blue', text: 'Normal' },
-  HIGH: { color: 'orange', text: 'High' },
-  URGENT: { color: 'red', text: 'Urgent' },
-};
-
 const statusSteps = ['DRAFT', 'SUBMITTED', 'ASSIGNED', 'SAMPLING', 'REPORTING', 'APPROVING', 'COMPLETED'];
-
-const taskStatusMap: Record<string, { color: string }> = {
-  PENDING: { color: 'default' },
-  IN_PROGRESS: { color: 'processing' },
-  COMPLETED: { color: 'success' },
-  DELAYED: { color: 'error' },
-};
 
 const RequestDetail: React.FC = () => {
   const params = useParams<{ id: string }>();
   const { message, modal } = App.useApp();
+  const intl = useIntl();
 
   const { data: requestData, loading: reqLoading, refresh } = useRequest(() => getRequest(params.id));
   const { data: tasksData, refresh: refreshTasks } = useRequest(() => getRequestTasks(params.id));
@@ -45,6 +21,22 @@ const RequestDetail: React.FC = () => {
   const req = requestData?.data;
   const tasks = tasksData?.data ?? [];
   const workflow = workflowData?.data;
+
+  const getStatusText = (s: string) => intl.formatMessage({ id: `request.status.${s}`, defaultMessage: s });
+
+  const statusColorMap: Record<string, string> = {
+    DRAFT: 'default', SUBMITTED: 'processing', ASSIGNED: 'processing',
+    SAMPLING: 'warning', REPORTING: 'warning', APPROVING: 'orange',
+    COMPLETED: 'success', REJECTED: 'error',
+  };
+
+  const getPriorityText = (p: string) => intl.formatMessage({ id: `request.priority.${p}`, defaultMessage: p });
+  const priorityColorMap: Record<string, string> = { LOW: 'default', NORMAL: 'blue', HIGH: 'orange', URGENT: 'red' };
+
+  const getTaskStatusText = (s: string) => intl.formatMessage({ id: `request.task.${s}`, defaultMessage: s });
+  const taskColorMap: Record<string, string> = {
+    PENDING: 'default', IN_PROGRESS: 'processing', COMPLETED: 'success', DELAYED: 'error',
+  };
 
   const engineers = (usersData?.data?.records ?? []).filter((u: any) =>
     (u.roles || '').split(',').includes('ENGINEER'),
@@ -71,22 +63,22 @@ const RequestDetail: React.FC = () => {
       .map((t: API.AnalysisTask) => ({ taskId: t.id, engineerId: assignMap[t.id] }))
       .filter((a: { engineerId?: string }) => !!a.engineerId);
     if (assignments.length === 0) {
-      message.error('Please assign an engineer to at least one task');
+      message.error(intl.formatMessage({ id: 'request.detail.msg.selectEngineer', defaultMessage: 'Please assign an engineer to at least one task' }));
       return;
     }
     try {
       const res = await assignRequest(params.id, assignments as { taskId: string; engineerId: string }[]);
       if (res?.code !== 200) {
-        message.error(res?.message || 'Assignment failed');
+        message.error(res?.message || intl.formatMessage({ id: 'request.detail.msg.assignmentFailed', defaultMessage: 'Assignment failed' }));
         return;
       }
-      message.success('Request assigned');
+      message.success(intl.formatMessage({ id: 'request.detail.msg.requestAssigned', defaultMessage: 'Request assigned' }));
       setAssignOpen(false);
       setAssignMap({});
       refresh();
       refreshTasks();
     } catch {
-      message.error('Assignment failed');
+      message.error(intl.formatMessage({ id: 'request.detail.msg.assignmentFailed', defaultMessage: 'Assignment failed' }));
     }
   };
 
@@ -95,16 +87,16 @@ const RequestDetail: React.FC = () => {
       switch (action) {
         case 'submit':
           await submitRequest(params.id);
-          message.success('Request submitted');
+          message.success(intl.formatMessage({ id: 'request.detail.msg.requestSubmitted', defaultMessage: 'Request submitted' }));
           refresh();
           break;
         case 'reject':
           modal.confirm({
-            title: 'Reject Request',
+            title: intl.formatMessage({ id: 'request.detail.modal.reject.title', defaultMessage: 'Reject Request' }),
             content: (
               <Form form={rejectForm} layout="vertical">
-                <Form.Item name="reason" label="Reason" rules={[{ required: true, message: 'Please enter a reject reason' }]}>
-                  <Input.TextArea rows={3} placeholder="Why is this request being rejected?" />
+                <Form.Item name="reason" label={intl.formatMessage({ id: 'request.detail.modal.reject.reason', defaultMessage: 'Reason' })} rules={[{ required: true }]}>
+                  <Input.TextArea rows={3} placeholder={intl.formatMessage({ id: 'request.detail.modal.reject.placeholder', defaultMessage: 'Why is this request being rejected?' })} />
                 </Form.Item>
               </Form>
             ),
@@ -113,11 +105,9 @@ const RequestDetail: React.FC = () => {
                 const values = await rejectForm.validateFields();
                 await rejectRequest(params.id, { reason: values.reason });
                 rejectForm.resetFields();
-                message.success('Request rejected');
+                message.success(intl.formatMessage({ id: 'request.detail.msg.requestRejected', defaultMessage: 'Request rejected' }));
                 refresh();
               } catch {
-                // validateFields rejected — Ant already shows the error
-                // inline; re-throw so the modal stays open.
                 throw new Error('validation');
               }
             },
@@ -126,11 +116,11 @@ const RequestDetail: React.FC = () => {
           return;
         case 'receive-sample':
           modal.confirm({
-            title: 'Receive Sample',
+            title: intl.formatMessage({ id: 'request.detail.modal.receiveSample.title', defaultMessage: 'Receive Sample' }),
             content: (
               <Form form={sampleForm} layout="vertical">
-                <Form.Item name="deliveryNote" label="Delivery Note">
-                  <Input.TextArea rows={2} placeholder="Optional delivery note" />
+                <Form.Item name="deliveryNote" label={intl.formatMessage({ id: 'request.detail.modal.receiveSample.deliveryNote', defaultMessage: 'Delivery Note' })}>
+                  <Input.TextArea rows={2} />
                 </Form.Item>
               </Form>
             ),
@@ -139,7 +129,7 @@ const RequestDetail: React.FC = () => {
                 const values = await sampleForm.validateFields();
                 await receiveSample(params.id, { deliveryNote: values.deliveryNote || '' });
                 sampleForm.resetFields();
-                message.success('Sample received');
+                message.success(intl.formatMessage({ id: 'request.detail.msg.sampleReceived', defaultMessage: 'Sample received' }));
                 refresh();
               } catch {
                 throw new Error('validation');
@@ -150,27 +140,27 @@ const RequestDetail: React.FC = () => {
           return;
         case 'start-reporting':
           await startReporting(params.id);
-          message.success('Reporting phase started');
+          message.success(intl.formatMessage({ id: 'request.detail.msg.reportingStarted', defaultMessage: 'Reporting phase started' }));
           refresh();
           break;
         case 'complete':
           await completeRequest(params.id);
-          message.success('Request completed');
+          message.success(intl.formatMessage({ id: 'request.detail.msg.requestCompleted', defaultMessage: 'Request completed' }));
           refresh();
           break;
       }
     } catch {
-      message.error('Action failed');
+      message.error(intl.formatMessage({ id: 'request.detail.msg.actionFailed', defaultMessage: 'Action failed' }));
     }
   };
 
   const handleTaskStatusChange = async (taskId: string, status: string) => {
     try {
       await updateAnalysisTask(taskId, { status });
-      message.success('Task updated');
+      message.success(intl.formatMessage({ id: 'request.detail.msg.taskUpdated', defaultMessage: 'Task updated' }));
       refresh();
     } catch {
-      message.error('Failed to update task');
+      message.error(intl.formatMessage({ id: 'request.detail.msg.taskUpdateFailed', defaultMessage: 'Failed to update task' }));
     }
   };
 
@@ -180,31 +170,31 @@ const RequestDetail: React.FC = () => {
     switch (req.status) {
       case 'DRAFT':
         if (access.canManager) {
-          btns.push(<Button key="submit" type="primary" onClick={() => handleAction('submit')}>Submit</Button>);
+          btns.push(<Button key="submit" type="primary" onClick={() => handleAction('submit')}>{intl.formatMessage({ id: 'request.detail.btn.submit', defaultMessage: 'Submit' })}</Button>);
         }
         break;
       case 'SUBMITTED':
         if (access.canManager) {
-          btns.push(<Button key="assign" type="primary" onClick={() => setAssignOpen(true)}>Assign</Button>);
-          btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
+          btns.push(<Button key="assign" type="primary" onClick={() => setAssignOpen(true)}>{intl.formatMessage({ id: 'request.detail.btn.assign', defaultMessage: 'Assign' })}</Button>);
+          btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>{intl.formatMessage({ id: 'request.detail.btn.reject', defaultMessage: 'Reject' })}</Button>);
         }
         break;
       case 'ASSIGNED':
         if (access.canTechnician || access.canManager) {
-          btns.push(<Button key="receive" type="primary" onClick={() => handleAction('receive-sample')}>Receive Sample</Button>);
+          btns.push(<Button key="receive" type="primary" onClick={() => handleAction('receive-sample')}>{intl.formatMessage({ id: 'request.detail.btn.receiveSample', defaultMessage: 'Receive Sample' })}</Button>);
         }
         if (access.canManager) {
-          btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>Reject</Button>);
+          btns.push(<Button key="reject" danger onClick={() => handleAction('reject')}>{intl.formatMessage({ id: 'request.detail.btn.reject', defaultMessage: 'Reject' })}</Button>);
         }
         break;
       case 'SAMPLING':
         if (access.canEngineer || access.canManager) {
-          btns.push(<Button key="report" type="primary" onClick={() => handleAction('start-reporting')}>Start Reporting</Button>);
+          btns.push(<Button key="report" type="primary" onClick={() => handleAction('start-reporting')}>{intl.formatMessage({ id: 'request.detail.btn.startReporting', defaultMessage: 'Start Reporting' })}</Button>);
         }
         break;
       case 'APPROVING':
         if (access.canManager) {
-          btns.push(<Button key="complete" type="primary" onClick={() => handleAction('complete')}>Complete</Button>);
+          btns.push(<Button key="complete" type="primary" onClick={() => handleAction('complete')}>{intl.formatMessage({ id: 'request.detail.btn.complete', defaultMessage: 'Complete' })}</Button>);
         }
         break;
     }
@@ -212,26 +202,26 @@ const RequestDetail: React.FC = () => {
   };
 
   const taskColumns = [
-    { title: 'Item ID', dataIndex: 'itemId', width: 120 },
-    { title: 'Assignee', dataIndex: 'assigneeId', width: 120, render: (v: string) => v || '-' },
+    { title: intl.formatMessage({ id: 'request.detail.table.itemId', defaultMessage: 'Item ID' }), dataIndex: 'itemId', width: 120 },
+    { title: intl.formatMessage({ id: 'request.detail.table.assignee', defaultMessage: 'Assignee' }), dataIndex: 'assigneeId', width: 120, render: (v: string) => v || '-' },
     {
-      title: 'Status', dataIndex: 'status', width: 120,
-      render: (v: string) => <Tag color={taskStatusMap[v]?.color || 'default'}>{v}</Tag>,
+      title: intl.formatMessage({ id: 'request.detail.table.status', defaultMessage: 'Status' }), dataIndex: 'status', width: 120,
+      render: (v: string) => <Tag color={taskColorMap[v] || 'default'}>{getTaskStatusText(v)}</Tag>,
     },
-    { title: 'Delay Reason', dataIndex: 'delayReason', ellipsis: true },
+    { title: intl.formatMessage({ id: 'request.detail.table.delayReason', defaultMessage: 'Delay Reason' }), dataIndex: 'delayReason', ellipsis: true },
     {
-      title: 'Started', dataIndex: 'startedAt', width: 160,
+      title: intl.formatMessage({ id: 'request.detail.table.started', defaultMessage: 'Started' }), dataIndex: 'startedAt', width: 160,
       render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: 'Completed', dataIndex: 'completedAt', width: 160,
+      title: intl.formatMessage({ id: 'request.detail.table.completed', defaultMessage: 'Completed' }), dataIndex: 'completedAt', width: 160,
       render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: 'Action', width: 180,
+      title: intl.formatMessage({ id: 'request.detail.table.action', defaultMessage: 'Action' }), width: 180,
       render: (_: any, record: API.AnalysisTask) => {
-        if (record.status === 'PENDING') return <Button size="small" onClick={() => handleTaskStatusChange(record.id, 'IN_PROGRESS')}>Start</Button>;
-        if (record.status === 'IN_PROGRESS') return <Button size="small" type="primary" onClick={() => handleTaskStatusChange(record.id, 'COMPLETED')}>Complete</Button>;
+        if (record.status === 'PENDING') return <Button size="small" onClick={() => handleTaskStatusChange(record.id, 'IN_PROGRESS')}>{intl.formatMessage({ id: 'request.detail.btn.start', defaultMessage: 'Start' })}</Button>;
+        if (record.status === 'IN_PROGRESS') return <Button size="small" type="primary" onClick={() => handleTaskStatusChange(record.id, 'COMPLETED')}>{intl.formatMessage({ id: 'request.detail.btn.complete', defaultMessage: 'Complete' })}</Button>;
         return null;
       },
     },
@@ -239,7 +229,7 @@ const RequestDetail: React.FC = () => {
 
   return (
     <PageContainer
-      title={req?.requestNo || 'Request Detail'}
+      title={req?.requestNo || intl.formatMessage({ id: 'menu.request.list' })}
       onBack={() => history.push('/request/list')}
       extra={actionButtons()}
     >
@@ -249,41 +239,41 @@ const RequestDetail: React.FC = () => {
             <Steps
               current={currentStepIndex >= 0 ? currentStepIndex : 0}
               items={statusSteps.map((s) => ({
-                title: statusMap[s]?.text || s,
+                title: getStatusText(s),
                 status: req.status === 'REJECTED' && s === statusSteps[currentStepIndex] ? 'error' : undefined,
               }))}
             />
           </Card>
 
-          <Card title="Request Information" style={{ marginBottom: 16 }}>
+          <Card title={intl.formatMessage({ id: 'request.detail.requestInfo' })} style={{ marginBottom: 16 }}>
             <Descriptions column={3}>
-              <Descriptions.Item label="Request No">{req.requestNo}</Descriptions.Item>
-              <Descriptions.Item label="Brand">{req.brandId}</Descriptions.Item>
-              <Descriptions.Item label="Priority">
-                <Tag color={priorityMap[req.priority]?.color}>{priorityMap[req.priority]?.text || req.priority}</Tag>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.requestNo', defaultMessage: 'Request No' })}>{req.requestNo}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.brand', defaultMessage: 'Brand' })}>{req.brandId}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.priority', defaultMessage: 'Priority' })}>
+                <Tag color={priorityColorMap[req.priority]}>{getPriorityText(req.priority)}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag color={statusMap[req.status]?.color}>{statusMap[req.status]?.text || req.status}</Tag>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.status', defaultMessage: 'Status' })}>
+                <Tag color={statusColorMap[req.status]}>{getStatusText(req.status)}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Due Date">
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.dueDate', defaultMessage: 'Due Date' })}>
                 {req.dueDate ? dayjs(req.dueDate).format('YYYY-MM-DD') : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Total Cost">
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.totalCost', defaultMessage: 'Total Cost' })}>
                 {req.totalCost != null ? `¥${req.totalCost.toFixed(2)}` : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Part Number">{req.partNumber || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Part Name">{req.partName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="ECO">{req.eco || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Supplier">{req.supplierName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Supplier Code">{req.supplierCode || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Request Reason" span={3}>{req.requestReason || '-'}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.partNumber', defaultMessage: 'Part Number' })}>{req.partNumber || '-'}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.partName', defaultMessage: 'Part Name' })}>{req.partName || '-'}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.eco', defaultMessage: 'ECO' })}>{req.eco || '-'}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.supplier', defaultMessage: 'Supplier' })}>{req.supplierName || '-'}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.supplierCode', defaultMessage: 'Supplier Code' })}>{req.supplierCode || '-'}</Descriptions.Item>
+              <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.requestReason', defaultMessage: 'Request Reason' })} span={3}>{req.requestReason || '-'}</Descriptions.Item>
               {req.sampleDeliveryNote && (
-                <Descriptions.Item label="Delivery Note" span={3}>{req.sampleDeliveryNote}</Descriptions.Item>
+                <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.deliveryNote', defaultMessage: 'Delivery Note' })} span={3}>{req.sampleDeliveryNote}</Descriptions.Item>
               )}
             </Descriptions>
           </Card>
 
-          <Card title="Analysis Tasks" style={{ marginBottom: 16 }}>
+          <Card title={intl.formatMessage({ id: 'request.detail.analysisTasks' })} style={{ marginBottom: 16 }}>
             <Table
               columns={taskColumns}
               dataSource={tasks}
@@ -294,10 +284,10 @@ const RequestDetail: React.FC = () => {
           </Card>
 
           {workflow && (
-            <Card title="Workflow Status">
+            <Card title={intl.formatMessage({ id: 'request.detail.workflowStatus' })}>
               <Descriptions column={2}>
-                <Descriptions.Item label="Current Task">{workflow.taskName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Assignee">{workflow.assignee || '-'}</Descriptions.Item>
+                <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.currentTask', defaultMessage: 'Current Task' })}>{workflow.taskName || '-'}</Descriptions.Item>
+                <Descriptions.Item label={intl.formatMessage({ id: 'request.detail.label.assignee', defaultMessage: 'Assignee' })}>{workflow.assignee || '-'}</Descriptions.Item>
               </Descriptions>
             </Card>
           )}
@@ -309,7 +299,7 @@ const RequestDetail: React.FC = () => {
               @PreAuthorize. */}
           {(req?.status === 'REPORTING' || req?.status === 'APPROVING' || req?.status === 'COMPLETED')
             && (access.canEngineer || access.canManager) && (
-            <Card title="Report">
+            <Card title={intl.formatMessage({ id: 'request.detail.report' })}>
               <Button
                 key="generate-report"
                 type="primary"
@@ -319,30 +309,30 @@ const RequestDetail: React.FC = () => {
                   try {
                     const res = await createReport(params.id);
                     if (res?.code === 200 && res?.data?.id) {
-                      message.success('Report generated');
+                      message.success(intl.formatMessage({ id: 'request.detail.msg.reportGenerated', defaultMessage: 'Report generated' }));
                       history.push(`/report/${res.data.id}`);
                     } else {
-                      message.success('Report generated');
+                      message.success(intl.formatMessage({ id: 'request.detail.msg.reportGenerated', defaultMessage: 'Report generated' }));
                       refresh();
                     }
                   } catch {
-                    message.error('Failed to generate report');
+                    message.error(intl.formatMessage({ id: 'request.detail.msg.reportFailed', defaultMessage: 'Failed to generate report' }));
                   } finally {
                     setCreatingReport(false);
                   }
                 }}
               >
-                Generate Report
+                {intl.formatMessage({ id: 'request.detail.btn.generateReport', defaultMessage: 'Generate Report' })}
               </Button>
             </Card>
           )}
 
           <Modal
-            title="Assign Engineers"
+            title={intl.formatMessage({ id: 'request.detail.assignEngineers' })}
             open={assignOpen}
             onOk={handleAssign}
             onCancel={() => setAssignOpen(false)}
-            okText="Assign"
+            okText={intl.formatMessage({ id: 'request.detail.btn.assign', defaultMessage: 'Assign' })}
             width={640}
           >
             <Table
@@ -351,13 +341,13 @@ const RequestDetail: React.FC = () => {
               size="small"
               pagination={false}
               columns={[
-                { title: 'Item ID', dataIndex: 'itemId', width: 160 },
+                { title: intl.formatMessage({ id: 'request.detail.table.itemId', defaultMessage: 'Item ID' }), dataIndex: 'itemId', width: 160 },
                 {
-                  title: 'Engineer',
+                  title: intl.formatMessage({ id: 'request.detail.table.engineer', defaultMessage: 'Engineer' }),
                   render: (_: any, record: API.AnalysisTask) => (
                     <Select
                       style={{ width: '100%' }}
-                      placeholder="Select engineer"
+                      placeholder={intl.formatMessage({ id: 'request.detail.btn.assign', defaultMessage: 'Select engineer' })}
                       value={assignMap[record.id]}
                       onChange={(v) => setAssignMap((m) => ({ ...m, [record.id]: v }))}
                       options={engineers.map((e: any) => ({

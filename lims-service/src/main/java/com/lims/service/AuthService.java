@@ -400,7 +400,27 @@ public class AuthService {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
         String storedHash = user != null ? user.getPasswordHash() : "$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid";
         boolean ok = encoder.matches(rawPassword, storedHash);
+
+        // Issue #83: Account lockout after 5 failed attempts
+        if (user != null) {
+            if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
+                log.warn("Login attempt for locked account: loginId={}, lockedUntil={}", loginId, user.getLockedUntil());
+                throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                        "Account is temporarily locked. Try again after " + user.getLockedUntil());
+            }
+        }
+
         if (user == null || !ok) {
+            // Issue #83: Increment failed login attempts and lock if threshold exceeded
+            if (user != null) {
+                int attempts = (user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1;
+                user.setFailedLoginAttempts(attempts);
+                if (attempts >= 5) {
+                    user.setLockedUntil(LocalDateTime.now().plusMinutes(15));
+                    log.warn("Account locked after {} failed attempts: loginId={}", attempts, loginId);
+                }
+                sysUserMapper.updateById(user);
+            }
             log.warn("Login failed for loginId={} (userExists={})", loginId, user != null);
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "Invalid loginId or password");
         }
@@ -408,6 +428,9 @@ public class AuthService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "User account is disabled");
         }
 
+        // Issue #83: Reset failed attempts on successful login
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
         user.setLastLoginAt(LocalDateTime.now());
         sysUserMapper.updateById(user);
 
@@ -433,9 +456,9 @@ public class AuthService {
         if (userId == null) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "Not authenticated");
         }
-        if (newPassword == null || newPassword.length() < 6) {
+        if (newPassword == null || newPassword.length() < 8) {
             throw new BusinessException(ErrorCode.PARAM_VALIDATION_FAILED,
-                    "New password must be at least 6 characters");
+                    "New password must be at least 8 characters");
         }
         SysUser user = sysUserMapper.selectById(userId);
         if (user == null) {
@@ -446,7 +469,9 @@ public class AuthService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "Current password is incorrect");
         }
         user.setPasswordHash(encoder.encode(newPassword));
+        // Issue #83: Increment session version to invalidate existing JWTs
+        user.setSessionVersion((user.getSessionVersion() != null ? user.getSessionVersion() : 0) + 1);
         sysUserMapper.updateById(user);
-        log.info("Password changed for userId={}", userId);
+        log.info("Password changed for userId={}, sessionVersion incremented", userId);
     }
 }

@@ -1,0 +1,69 @@
+// 使用CSS变量替代less变量
+// 移除antd主题导入，使用CSS自定义属性
+
+.customLayout {
+  position: relative;
+  height: 100vh;
+  
+  // 确保ProLayout正确显示
+  .ant-pro-layout {
+    height: 100%;
+    
+    .ant-pro-layout-content {
+      position: relative;
+      
+      // 为退出按钮留出空间
+      padding-bottom: 80px;
+      
+      @media (max-width: 768px) {
+        padding-bottom: 60px;
+      }
+    }
+  }
+  
+  // 确保内容区域不会被退出按钮遮挡
+  .ant-pro-page-container {
+    min-height: calc(100vh - 200px);
+    
+    @media (max-width: 768px) {
+      min-height: calc(100vh - 160px);
+    }
+  }
+  
+  // 响应式调整
+  @media (max-width: 768px) {
+    .ant-pro-layout {
+      .ant-pro-layout-content {
+        padding: 16px;
+      }
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .ant-pro-layout {
+      .ant-pro-layout-content {
+        padding: 12px;
+      }
+    }
+  }
+}
+
+// 深色主题支持
+[data-theme='dark'] {
+  .customLayout {
+    .ant-pro-layout {
+      background: var(--ant-layout-body-background, #f0f2f5);
+    }
+  }
+}
+
+// 打印样式
+@media print {
+  .customLayout {
+    .ant-pro-layout {
+      .ant-pro-layout-content {
+        padding-bottom: 0;
+      }
+    }
+  }
+}

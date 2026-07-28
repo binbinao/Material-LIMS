@@ -1,29 +1,17 @@
 import React from 'react';
-import { Dropdown, Button, Modal } from 'antd';
+import { Dropdown, Button } from 'antd';
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 
 /**
  * UserMenu — top-right Dropdown shown by the Umi layout's
  * `actionsRender` callback. Displays the current user's displayName
- * and a Logout item. Logout now goes through Modal.confirm so a
- * misclick doesn't kick the user out of the app.
+ * and a Logout item that clears the dev-login marker and redirects
+ * to /login. Extracted to a .tsx file because Umi's config parser
+ * (esbuild without JSX transform) does not support inline JSX in
+ * .umirc.ts.
  */
 export default function UserMenu({ initialState }: { initialState?: any }) {
   const user = initialState?.currentUser;
-
-  const confirmLogout = () => {
-    Modal.confirm({
-      title: '确认退出登录？',
-      okText: '退出',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        const { logout } = await import('../../utils/auth');
-        await logout();
-      },
-    });
-  };
-
   return (
     <Dropdown
       menu={{
@@ -43,7 +31,10 @@ export default function UserMenu({ initialState }: { initialState?: any }) {
             key: 'logout',
             icon: <LogoutOutlined />,
             label: 'Logout',
-            onClick: confirmLogout,
+            onClick: async () => {
+              const { logout } = await import('../../utils/auth');
+              logout();
+            },
           },
         ],
       }}

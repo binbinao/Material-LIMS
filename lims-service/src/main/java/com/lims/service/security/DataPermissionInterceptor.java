@@ -27,18 +27,28 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 import java.sql.SQLException;
 
 /**
- * 数据权限拦截器：根据当前用户角色，对涉及 request / report / analysis_task 等核心业务表的查询，
- * 自动追加 WHERE 条件。
+ * 数据权限拦截器：根据当前用户角色，对涉及 request / report / analysis_task / sample
+ * 等核心业务表的查询，自动追加 WHERE 条件，确保用户只能看到与自己相关的数据行。
+ *
+ * 权限映射：
+ *   request       → requester_id = 当前用户（委托发起人只能看自己的委托）
+ *   analysis_task → assignee_id  = 当前用户（工程师只能看分配给自己的任务）
+ *   report        → author_id    = 当前用户（作者只能看自己写的报告）
+ *   sample        → received_by  = 当前用户（技术员只能看自己接收的样品）
  *
  * 注意：基础数据表（brand / department / equipment 等）和 sys_user 不参与过滤。
  *      MANAGER / ADMIN 也不过滤（看全量）。
  *
  * 实现策略：仅当 SQL 是 SELECT 且 from 单表为受控表 + 当前用户为非管理者角色时，注入条件。
- * 复杂 join 查询不在 MVP 拦截范围内（会被忽略并打日志）。
+ * 复杂查询优先通过正则回退机制处理；无法证明受控表已过滤时拒绝执行，避免
+ * 在 SQL 解析失败时把业务数据暴露给普通用户。
  */
 @Slf4j
 @Component
@@ -46,6 +56,12 @@ public class DataPermissionInterceptor implements InnerInterceptor {
 
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_MANAGER = "MANAGER";
+    private static final Set<String> KNOWN_CONTROLLED_TABLES =
+            Set.of("request", "analysis_task", "report", "sample");
+    private static final Pattern CONTROLLED_TABLE_REFERENCE = Pattern.compile(
+            "(?i)\\b(?:from|join)\\s+(?:[\\w\\\"`]+\\.)?[\\\"`]?"
+                    + "(request|analysis_task|report|sample)\\b");
+    private static final AtomicLong FILTER_FAILURES = new AtomicLong();
 
     /**
      * True when the active Spring profile contains "dev". In dev we
@@ -84,9 +100,20 @@ public class DataPermissionInterceptor implements InnerInterceptor {
         try {
             Statement stmt = CCJSqlParserUtil.parse(originalSql);
             if (!(stmt instanceof Select)) return;
-            // jsqlparser 4.9: PlainSelect 实现了 Select 接口；复杂查询（SetOperationList 等）跳过
-            if (!(stmt instanceof PlainSelect ps)) return;
-            if (!(ps.getFromItem() instanceof Table table)) return;
+            // jsqlparser 4.9: PlainSelect 实现了 Select 接口；复杂查询（SetOperationList 等）
+            // 必须先确认不涉及受控表，不能静默放行。
+            if (!(stmt instanceof PlainSelect ps)) {
+                if (containsControlledTableReference(originalSql)) {
+                    failClosed("unsupported select shape");
+                }
+                return;
+            }
+            if (!(ps.getFromItem() instanceof Table table)) {
+                if (containsControlledTableReference(originalSql)) {
+                    failClosed("unsupported FROM item");
+                }
+                return;
+            }
             String tableName = stripQuotes(table.getName()).toLowerCase();
 
             Expression injected = buildPermissionPredicate(tableName, principal);
@@ -97,20 +124,13 @@ public class DataPermissionInterceptor implements InnerInterceptor {
             String newSql = ps.toString();
             PluginUtils.mpBoundSql(boundSql).sql(newSql);
             if (log.isDebugEnabled()) {
-                log.debug("Data permission injected. table={}, user={}, sql={}", tableName, principal.userId(), newSql);
+                log.debug("Data permission injected. table={}, user={}", tableName, principal.userId());
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            // Issue #19: fail-soft instead of fail-closed. jsqlparser 4.9
-            // cannot parse JOIN/UNION/CTE/subquery statements, and throwing
-            // here used to break every legitimate complex query for
-            // non-ADMIN/MANAGER users. We now:
-            //   1. try a regex-based fallback that picks the first
-            //      "FROM <table>" and adds the outer-row filter
-            //   2. if that also fails, log a WARN and let the original
-            //      SQL through (fail-soft). ADMIN/MANAGER have early-
-            //      returned above so they never reach this catch.
-            log.warn("DataPermission parse failed (jsqlparser); falling back: {}",
-                    e.getMessage());
+            log.warn("[DataPermission] SQL parse failed for user={}; attempting controlled fallback. error={}",
+                    principal.userId(), e.getMessage());
             String outerTable = tryRegexFallback(originalSql);
             if (outerTable != null) {
                 Expression injected = buildPermissionPredicate(outerTable, principal);
@@ -118,14 +138,15 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                     String newSql = injectWhere(originalSql, injected, outerTable);
                     if (newSql != null) {
                         PluginUtils.mpBoundSql(boundSql).sql(newSql);
-                        log.info("DataPermission regex-fallback injected WHERE on {} for user {}",
+                        log.info("[DataPermission] Regex fallback injected permission predicate. table={}, user={}",
                                 outerTable, principal.userId());
                         return;
                     }
                 }
             }
-            log.warn("DataPermission regex-fallback also failed; running original SQL unfiltered. " +
-                    "userId={}, sql={}", principal.userId(), originalSql);
+            if (containsControlledTableReference(originalSql)) {
+                failClosed("unable to parse controlled-table query", e);
+            }
         }
     }
 
@@ -140,6 +161,8 @@ public class DataPermissionInterceptor implements InnerInterceptor {
                 return eq("assignee_id", userId);
             case "report":
                 return eq("author_id", userId);
+            case "sample":
+                return eq("received_by", userId);
             default:
                 return null;
         }
@@ -158,19 +181,54 @@ public class DataPermissionInterceptor implements InnerInterceptor {
     }
 
     /**
-     * Issue #19: regex-based fallback for queries jsqlparser can't parse
-     * (JOIN/UNION/CTE). Returns the first {@code <word>} token after the
-     * first {@code FROM} keyword, lower-cased and quote-stripped, or null
-     * if no match. Note: this is intentionally conservative — we only
-     * handle the simple {@code FROM <table>} pattern, not
-     * {@code FROM <schema>.<table>} or {@code FROM <table> AS <alias>}.
-     * A more complete parser belongs in a follow-up.
+     * Regex-based fallback for queries jsqlparser can't parse
+     * (JOIN/UNION/CTE). Extracts the first table name after FROM, handling
+     * aliases: for {@code FROM request r}, returns {@code request} not
+     * {@code r}. Only returns a name that matches a known controlled table
+     * (request / analysis_task / report / sample); otherwise returns null.
+     *
+     * Strategy: capture all consecutive identifier tokens after FROM, then
+     * pick the first one that matches a controlled table name (case-insensitive).
+     * This handles: FROM request, FROM request r, FROM request AS r, FROM schema.request.
      */
     static String tryRegexFallback(String sql) {
         if (sql == null) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "(?i)\\bfrom\\s+([A-Za-z_][A-Za-z0-9_]*)").matcher(sql);
-        return m.find() ? stripQuotes(m.group(1)).toLowerCase() : null;
+                "(?i)\\bfrom\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\s+(?:as\\s+)?[A-Za-z_][A-Za-z0-9_]*)*)")
+                .matcher(sql);
+        if (!m.find()) return null;
+        // Split the captured group into tokens, clean quotes, check against known tables
+        String[] tokens = m.group(1).split("\\s+");
+        for (String token : tokens) {
+            String cleaned = stripQuotes(token).toLowerCase();
+            if (KNOWN_CONTROLLED_TABLES.contains(cleaned)) {
+                return cleaned;
+            }
+            // Skip alias keywords like "AS"
+        }
+        return null;
+    }
+
+    static boolean containsControlledTableReference(String sql) {
+        return sql != null && CONTROLLED_TABLE_REFERENCE.matcher(sql).find();
+    }
+
+    static long filterFailureCount() {
+        return FILTER_FAILURES.get();
+    }
+
+    private static void failClosed(String reason) {
+        long failureCount = FILTER_FAILURES.incrementAndGet();
+        log.error("[DataPermission] refusing unverified controlled-table query. reason={}, failures={}",
+                reason, failureCount);
+        throw new BusinessException(ErrorCode.DATA_PERMISSION_FILTER_FAILED, reason);
+    }
+
+    private static void failClosed(String reason, Exception cause) {
+        long failureCount = FILTER_FAILURES.incrementAndGet();
+        log.error("[DataPermission] refusing unverified controlled-table query. reason={}, failures={}, error={}",
+                reason, failureCount, cause.getMessage());
+        throw new BusinessException(ErrorCode.DATA_PERMISSION_FILTER_FAILED, reason);
     }
 
     /**

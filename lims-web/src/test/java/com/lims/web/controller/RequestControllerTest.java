@@ -6,13 +6,14 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.lims.model.dto.RequestCreateDTO;
 import com.lims.model.entity.AnalysisTask;
 import com.lims.model.entity.Request;
-import com.lims.service.RequestService;
+import com.lims.service.AnalysisTaskService;
+import com.lims.service.RequestCommandService;
+import com.lims.service.RequestQueryService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,17 +34,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * 委托模块 Web 层（RequestController）测试。
+ * 委托模块 Web 层（RequestController）测试——CQRS 重构后适配。
  *
- * <p>使用 standalone MockMvc 验证各接口的路由、参数绑定、请求体解析以及对 Service 层的委托调用。
- * 业务逻辑由 {@link RequestServiceTest} 覆盖，此处聚焦 HTTP 契约。
+ * <p>使用 standalone MockMvc 验证各接口的路由、参数绑定、请求体解析以及对三个 Service 的委托调用。
+ * 业务逻辑由 {@link com.lims.service.RequestServiceTest} 覆盖，此处聚焦 HTTP 契约。
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RequestController 委托接口测试")
 class RequestControllerTest {
 
     @Mock
-    private RequestService requestService;
+    private RequestCommandService requestCommandService;
+
+    @Mock
+    private RequestQueryService requestQueryService;
+
+    @Mock
+    private AnalysisTaskService analysisTaskService;
 
     @InjectMocks
     private RequestController requestController;
@@ -71,10 +78,12 @@ class RequestControllerTest {
         SecurityContextHolder.clearContext();
     }
 
+    // ────────────────────────── 查询类（RequestQueryService）──────────────────────────
+
     @Test
     @DisplayName("GET /api/v1/requests 分页查询并透传过滤参数")
     void shouldListRequests() throws Exception {
-        when(requestService.listRequests(2, 10, "DRAFT", "brand-1", "kw"))
+        when(requestQueryService.listRequests(2, 10, "DRAFT", "brand-1", "kw"))
                 .thenReturn(new Page<>(2, 10));
 
         mockMvc.perform(get("/api/v1/requests")
@@ -83,19 +92,19 @@ class RequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
 
-        verify(requestService).listRequests(2, 10, "DRAFT", "brand-1", "kw");
+        verify(requestQueryService).listRequests(2, 10, "DRAFT", "brand-1", "kw");
     }
 
     @Test
     @DisplayName("GET /api/v1/requests 使用默认分页参数")
     void shouldListWithDefaults() throws Exception {
-        when(requestService.listRequests(eq(1), eq(20), any(), any(), any()))
+        when(requestQueryService.listRequests(eq(1), eq(20), isNull(), isNull(), isNull()))
                 .thenReturn(new Page<>(1, 20));
 
         mockMvc.perform(get("/api/v1/requests"))
                 .andExpect(status().isOk());
 
-        verify(requestService).listRequests(1, 20, null, null, null);
+        verify(requestQueryService).listRequests(1, 20, null, null, null);
     }
 
     @Test
@@ -104,12 +113,36 @@ class RequestControllerTest {
         Request request = new Request();
         request.setId("req-1");
         request.setRequestNo("REQ-2026-0001");
-        when(requestService.getRequest("req-1")).thenReturn(request);
+        when(requestQueryService.getRequest("req-1")).thenReturn(request);
 
         mockMvc.perform(get("/api/v1/requests/req-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.requestNo").value("REQ-2026-0001"));
     }
+
+    @Test
+    @DisplayName("GET /api/v1/requests/{id}/workflow 返回工作流状态")
+    void shouldGetWorkflowStatus() throws Exception {
+        when(requestQueryService.getWorkflowStatus("req-1")).thenReturn(Map.of("taskId", "t-1"));
+
+        mockMvc.perform(get("/api/v1/requests/req-1/workflow"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.taskId").value("t-1"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/requests/my-tasks 返回当前用户待办")
+    void shouldGetMyTasks() throws Exception {
+        when(requestQueryService.getMyPendingTasks(USER_ID)).thenReturn(List.of(Map.of("taskId", "t-1")));
+
+        mockMvc.perform(get("/api/v1/requests/my-tasks"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].taskId").value("t-1"));
+
+        verify(requestQueryService).getMyPendingTasks(USER_ID);
+    }
+
+    // ────────────────────────── 命令类（RequestCommandService）──────────────────────────
 
     @Test
     @DisplayName("POST /api/v1/requests 创建委托并使用当前用户ID")
@@ -122,7 +155,7 @@ class RequestControllerTest {
 
         Request created = new Request();
         created.setId("req-1");
-        when(requestService.createRequest(any(RequestCreateDTO.class), eq(USER_ID))).thenReturn(created);
+        when(requestCommandService.createRequest(any(RequestCreateDTO.class), eq(USER_ID))).thenReturn(created);
 
         mockMvc.perform(post("/api/v1/requests")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -130,7 +163,7 @@ class RequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value("req-1"));
 
-        verify(requestService).createRequest(any(RequestCreateDTO.class), eq(USER_ID));
+        verify(requestCommandService).createRequest(any(RequestCreateDTO.class), eq(USER_ID));
     }
 
     @Test
@@ -143,7 +176,7 @@ class RequestControllerTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadRequest());
 
-        verify(requestService, never()).createRequest(any(), any());
+        verify(requestCommandService, never()).createRequest(any(), any());
     }
 
     @Test
@@ -160,7 +193,7 @@ class RequestControllerTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadRequest());
 
-        verify(requestService, never()).createRequest(any(), any());
+        verify(requestCommandService, never()).createRequest(any(), any());
     }
 
     @Test
@@ -169,7 +202,7 @@ class RequestControllerTest {
         mockMvc.perform(post("/api/v1/requests/req-1/submit"))
                 .andExpect(status().isOk());
 
-        verify(requestService).submitRequest("req-1", USER_ID);
+        verify(requestCommandService).submitRequest("req-1", USER_ID);
     }
 
     @Test
@@ -183,7 +216,7 @@ class RequestControllerTest {
                         .content(body))
                 .andExpect(status().isOk());
 
-        verify(requestService).assignRequest(eq("req-1"), anyList(), eq("URGENT"));
+        verify(requestCommandService).assignRequest(eq("req-1"), anyList(), eq("URGENT"));
     }
 
     @Test
@@ -194,7 +227,7 @@ class RequestControllerTest {
                         .content("{\"reason\":\"not ok\"}"))
                 .andExpect(status().isOk());
 
-        verify(requestService).rejectRequest("req-1", "not ok");
+        verify(requestCommandService).rejectRequest("req-1", "not ok");
     }
 
     @Test
@@ -205,7 +238,7 @@ class RequestControllerTest {
                         .content("{\"deliveryNote\":\"DN-1\"}"))
                 .andExpect(status().isOk());
 
-        verify(requestService).receiveSample("req-1", "DN-1", USER_ID);
+        verify(requestCommandService).receiveSample("req-1", "DN-1", USER_ID);
     }
 
     @Test
@@ -214,7 +247,7 @@ class RequestControllerTest {
         mockMvc.perform(post("/api/v1/requests/req-1/start-reporting"))
                 .andExpect(status().isOk());
 
-        verify(requestService).startReporting("req-1", USER_ID);
+        verify(requestCommandService).startReporting("req-1", USER_ID);
     }
 
     @Test
@@ -223,13 +256,15 @@ class RequestControllerTest {
         mockMvc.perform(post("/api/v1/requests/req-1/complete"))
                 .andExpect(status().isOk());
 
-        verify(requestService).completeRequest("req-1");
+        verify(requestCommandService).completeRequest("req-1");
     }
+
+    // ────────────────────────── 任务类（AnalysisTaskService）──────────────────────────
 
     @Test
     @DisplayName("GET /api/v1/requests/{id}/tasks 返回分析任务列表")
     void shouldGetTasks() throws Exception {
-        when(requestService.getAnalysisTasks("req-1")).thenReturn(List.of(new AnalysisTask()));
+        when(analysisTaskService.getAnalysisTasks("req-1")).thenReturn(List.of(new AnalysisTask()));
 
         mockMvc.perform(get("/api/v1/requests/req-1/tasks"))
                 .andExpect(status().isOk())
@@ -244,28 +279,6 @@ class RequestControllerTest {
                         .content("{\"status\":\"COMPLETED\",\"delayReason\":\"late\"}"))
                 .andExpect(status().isOk());
 
-        verify(requestService).updateAnalysisTask("task-1", "COMPLETED", "late", USER_ID);
-    }
-
-    @Test
-    @DisplayName("GET /api/v1/requests/{id}/workflow 返回工作流状态")
-    void shouldGetWorkflowStatus() throws Exception {
-        when(requestService.getWorkflowStatus("req-1")).thenReturn(Map.of("taskId", "t-1"));
-
-        mockMvc.perform(get("/api/v1/requests/req-1/workflow"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.taskId").value("t-1"));
-    }
-
-    @Test
-    @DisplayName("GET /api/v1/requests/my-tasks 返回当前用户待办")
-    void shouldGetMyTasks() throws Exception {
-        when(requestService.getMyPendingTasks(USER_ID)).thenReturn(List.of(Map.of("taskId", "t-1")));
-
-        mockMvc.perform(get("/api/v1/requests/my-tasks"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].taskId").value("t-1"));
-
-        verify(requestService).getMyPendingTasks(USER_ID);
+        verify(analysisTaskService).updateAnalysisTask("task-1", "COMPLETED", "late", USER_ID);
     }
 }

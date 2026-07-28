@@ -16,6 +16,6 @@ describe('UserList buttons', () => {
 
   it('renders Edit Roles action', async () => {
     renderWithProviders(<UserList />);
-    await waitFor(() => expect(screen.getByText('Edit Roles')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Edit User Roles')).toBeInTheDocument());
   });
 });

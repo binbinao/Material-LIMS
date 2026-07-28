@@ -20,7 +20,7 @@ export async function deleteBrand(id: string) {
 }
 
 /** Request API */
-export async function getRequests(params?: Record<string, any>) {
+export async function getRequests(params?: Record<string, any>): Promise<API.IApiResponse<API.IPageResult<API.Request>>> {
   return request(`${API_PREFIX}/requests`, { params });
 }
 
@@ -98,11 +98,11 @@ export async function getAnalysisItems(params?: Record<string, any>) {
   return request(`${API_PREFIX}/analysis-items`, { params });
 }
 
-export async function createAnalysisItem(data: any) {
+export async function createAnalysisItem(data: API.AnalysisItem) {
   return request(`${API_PREFIX}/analysis-items`, { method: 'POST', data });
 }
 
-export async function updateAnalysisItem(id: string, data: any) {
+export async function updateAnalysisItem(id: string, data: API.AnalysisItem) {
   return request(`${API_PREFIX}/analysis-items/${id}`, { method: 'PUT', data });
 }
 
@@ -115,11 +115,11 @@ export async function getRequestTypes(params?: Record<string, any>) {
   return request(`${API_PREFIX}/request-types`, { params });
 }
 
-export async function createRequestType(data: any) {
+export async function createRequestType(data: API.RequestType) {
   return request(`${API_PREFIX}/request-types`, { method: 'POST', data });
 }
 
-export async function updateRequestType(id: string, data: any) {
+export async function updateRequestType(id: string, data: API.RequestType) {
   return request(`${API_PREFIX}/request-types/${id}`, { method: 'PUT', data });
 }
 
@@ -137,11 +137,11 @@ export async function getDepartmentTree() {
   return request(`${API_PREFIX}/departments/tree`);
 }
 
-export async function createDepartment(data: any) {
+export async function createDepartment(data: API.Department) {
   return request(`${API_PREFIX}/departments`, { method: 'POST', data });
 }
 
-export async function updateDepartment(id: string, data: any) {
+export async function updateDepartment(id: string, data: API.Department) {
   return request(`${API_PREFIX}/departments/${id}`, { method: 'PUT', data });
 }
 
@@ -175,11 +175,11 @@ export async function getEquipment(id: string) {
   return request(`${API_PREFIX}/equipments/${id}`);
 }
 
-export async function createEquipment(data: any) {
+export async function createEquipment(data: API.Equipment) {
   return request(`${API_PREFIX}/equipments`, { method: 'POST', data });
 }
 
-export async function updateEquipment(id: string, data: any) {
+export async function updateEquipment(id: string, data: API.Equipment) {
   return request(`${API_PREFIX}/equipments/${id}`, { method: 'PUT', data });
 }
 
@@ -318,15 +318,15 @@ export async function getEquipmentRepair(id: string) {
   return request(`${API_PREFIX}/equipment-repairs/${id}`);
 }
 
-export async function createEquipmentRepair(data: any) {
+export async function createEquipmentRepair(data: API.EquipmentRepair) {
   return request(`${API_PREFIX}/equipment-repairs`, { method: 'POST', data });
 }
 
-export async function updateEquipmentRepair(id: string, data: any) {
+export async function updateEquipmentRepair(id: string, data: API.EquipmentRepair) {
   return request(`${API_PREFIX}/equipment-repairs/${id}`, { method: 'PUT', data });
 }
 
-export async function completeEquipmentRepair(id: string, data: any) {
+export async function completeEquipmentRepair(id: string, data: Partial<API.EquipmentRepair>) {
   return request(`${API_PREFIX}/equipment-repairs/${id}/complete`, { method: 'POST', data });
 }
 

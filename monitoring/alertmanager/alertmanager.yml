@@ -1,0 +1,75 @@
+global:
+  # 全局SMTP配置（可选）
+  smtp_smarthost: 'localhost:25'
+  smtp_from: 'alertmanager@lims.local'
+
+# 告警路由树
+route:
+  # 默认接收者
+  receiver: 'default-receiver'
+  
+  # 按严重程度分组
+  group_by: ['alertname', 'severity']
+  
+  # 分组等待时间
+  group_wait: 10s
+  
+  # 同一分组发送间隔
+  group_interval: 10s
+  
+  # 重复发送间隔
+  repeat_interval: 1h
+  
+  # 子路由
+  routes:
+    # 关键告警立即通知
+    - receiver: 'critical-alerts'
+      match:
+        severity: critical
+      group_wait: 5s
+      repeat_interval: 5m
+    
+    # 警告级别告警
+    - receiver: 'warning-alerts'
+      match:
+        severity: warning
+      group_wait: 30s
+      repeat_interval: 30m
+
+# 接收者定义
+receivers:
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:8080/api/alerts'
+        send_resolved: true
+
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://localhost:8080/api/alerts/critical'
+        send_resolved: true
+    # 邮件通知（可选配置）
+    # email_configs:
+    #   - to: 'admin@lims.local'
+    #     headers:
+    #       subject: '[CRITICAL] LIMS系统告警'
+
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://localhost:8080/api/alerts/warning'
+        send_resolved: true
+
+# 抑制规则
+inhibit_rules:
+  # 如果有关键告警，抑制相同实例的警告级别告警
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['instance', 'alertname']
+
+  # 如果服务不可用，抑制相关的性能告警
+  - source_match:
+      alertname: 'ServiceUnavailable'
+    target_match_re:
+      alertname: 'HighErrorRate|HighMemoryUsage|FrequentGarbageCollection'
+    equal: ['instance']

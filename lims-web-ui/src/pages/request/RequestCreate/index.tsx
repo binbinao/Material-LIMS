@@ -16,7 +16,7 @@ import {
 } from 'antd';
 import { useState, useEffect } from 'react';
 import { useRequest } from 'ahooks';
-import { history } from '@umijs/max';
+import { history, useIntl } from '@umijs/max';
 import {
   getBrands,
   getRequestTypes,
@@ -31,6 +31,7 @@ const { Text } = Typography;
 
 const RequestCreate: React.FC = () => {
   const [form] = Form.useForm();
+  const intl = useIntl();
   const [isProxy, setIsProxy] = useState(false);
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [cascadeData, setCascadeData] = useState<any[]>([]);
@@ -149,7 +150,7 @@ const RequestCreate: React.FC = () => {
       .map((v: string[]) => v[2]);
 
     if (analysisItemIds.length === 0) {
-      message.error('Please select at least one complete analysis item');
+      message.error(intl.formatMessage({ id: 'request.create.error.noItem' }));
       return;
     }
 
@@ -170,17 +171,17 @@ const RequestCreate: React.FC = () => {
       };
       const res = await createRequest(data);
       if (res?.code !== 200) {
-        message.error(res?.message || 'Failed to create request');
+        message.error(res?.message || intl.formatMessage({ id: 'request.create.error.failed' }));
         return;
       }
-      message.success('Request created successfully');
+      message.success(intl.formatMessage({ id: 'request.create.success' }));
       history.push('/request/list');
     } catch (err: any) {
       const errMsg =
         err?.response?.data?.message ||
         err?.data?.message ||
         err?.message ||
-        'Failed to create request';
+        intl.formatMessage({ id: 'request.create.error.failed' });
       message.error(errMsg);
     }
   };
@@ -188,26 +189,26 @@ const RequestCreate: React.FC = () => {
   const totalCost = selectedItems.reduce((sum: number, item: any) => sum + (item?.cost || 0), 0);
 
   return (
-    <PageContainer title="Create Request">
+    <PageContainer title={intl.formatMessage({ id: 'menu.request.create' })}>
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
-        <Card title="Basic Information" style={{ marginBottom: 16 }}>
+        <Card title={intl.formatMessage({ id: 'request.create.basicInfo' })} style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="brandId" label="Brand" rules={[{ required: true }]}>
+              <Form.Item name="brandId" label={intl.formatMessage({ id: 'request.create.form.brand' })} rules={[{ required: true }]}>
                 <Select
                   showSearch
-                  placeholder="Select brand"
+                  placeholder={intl.formatMessage({ id: 'common.search' })}
                   optionFilterProp="label"
                   options={brands.map((b: any) => ({ label: b.name, value: b.id }))}
                 />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="typeId" label="Request Type" rules={[{ required: true }]}>
+              <Form.Item name="typeId" label={intl.formatMessage({ id: 'request.create.form.requestType' })} rules={[{ required: true }]}>
                 <Select
                   showSearch
                   loading={requestTypesLoading}
-                  placeholder="Select request type"
+                  placeholder={intl.formatMessage({ id: 'common.search' })}
                   optionFilterProp="label"
                   options={requestTypes.map((t: any) => ({
                     label: t.taskDurationDays != null ? `${t.name} (${t.taskDurationDays}d)` : t.name,
@@ -217,7 +218,7 @@ const RequestCreate: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="priority" label="Priority" initialValue="NORMAL">
+              <Form.Item name="priority" label={intl.formatMessage({ id: 'request.create.form.priority' })} initialValue="NORMAL">
                 <Select
                   options={[
                     { label: 'Low', value: 'LOW' },
@@ -232,88 +233,87 @@ const RequestCreate: React.FC = () => {
 
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item label="Proxy Request">
+              <Form.Item label={intl.formatMessage({ id: 'request.create.form.proxyRequest' })}>
                 <Switch checked={isProxy} onChange={setIsProxy} />
               </Form.Item>
             </Col>
             {isProxy && (
               <Col span={8}>
-                <Form.Item name="realRequesterName" label="Real Requester Name" rules={[{ required: isProxy }]}>
-                  <Input placeholder="Name of the actual requester" />
+                <Form.Item name="realRequesterName" label={intl.formatMessage({ id: 'request.create.form.realRequesterName' })} rules={[{ required: isProxy }]}>
+                  <Input placeholder={intl.formatMessage({ id: 'request.create.form.realRequesterName' })} />
                 </Form.Item>
               </Col>
             )}
           </Row>
         </Card>
 
-        <Card title="Part & Supplier" style={{ marginBottom: 16 }}>
+        <Card title={intl.formatMessage({ id: 'request.create.partSupplier' })} style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="partSearch" label="Search Part Number">
+              <Form.Item name="partSearch" label={intl.formatMessage({ id: 'request.create.form.searchPart' })}>
                 <Select
                   showSearch
-                  placeholder="Type to search parts..."
+                  placeholder={intl.formatMessage({ id: 'request.create.typeToSearch' })}
                   filterOption={false}
                   onSearch={handlePartSearch}
                   onSelect={handlePartSelect}
                   loading={partSearchLoading}
                   options={partsOptions}
-                  notFoundContent={partSearchLoading ? 'Searching...' : 'Type keyword to search'}
+                  notFoundContent={partSearchLoading ? intl.formatMessage({ id: 'request.create.searching' }) : intl.formatMessage({ id: 'request.create.typeToSearch' })}
                 />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="supplierSearch" label="Search Supplier">
+              <Form.Item name="supplierSearch" label={intl.formatMessage({ id: 'request.create.form.searchSupplier' })}>
                 <Select
                   showSearch
-                  placeholder="Type to search suppliers..."
+                  placeholder={intl.formatMessage({ id: 'request.create.typeToSearch' })}
                   filterOption={false}
                   onSearch={handleSupplierSearch}
                   onSelect={handleSupplierSelect}
                   loading={supplierSearchLoading}
                   options={supplierOptions}
-                  notFoundContent={supplierSearchLoading ? 'Searching...' : 'Type keyword to search'}
+                  notFoundContent={supplierSearchLoading ? intl.formatMessage({ id: 'request.create.searching' }) : intl.formatMessage({ id: 'request.create.typeToSearch' })}
                 />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
             <Col span={6}>
-              <Form.Item name="partNumber" label="Part Number">
-                <Input placeholder="Auto-filled or manual" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item name="partName" label="Part Name">
-                <Input placeholder="Auto-filled or manual" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item name="eco" label="ECO">
+              <Form.Item name="partNumber" label={intl.formatMessage({ id: 'request.create.form.partNumber' })}>
                 <Input />
               </Form.Item>
             </Col>
             <Col span={6}>
-              <Form.Item name="supplierName" label="Supplier Name">
-                <Input placeholder="Auto-filled or manual" />
+              <Form.Item name="partName" label={intl.formatMessage({ id: 'request.create.form.partName' })}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="eco" label={intl.formatMessage({ id: 'request.create.form.eco' })}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="supplierName" label={intl.formatMessage({ id: 'request.create.form.supplierName' })}>
+                <Input />
               </Form.Item>
             </Col>
           </Row>
         </Card>
 
-        <Card title="Request Details" style={{ marginBottom: 16 }}>
-          <Form.Item name="requestReason" label="Request Reason" rules={[{ required: true }]}>
-            <TextArea rows={4} placeholder="Describe the reason for this request in detail" />
+        <Card title={intl.formatMessage({ id: 'request.create.requestDetails' })} style={{ marginBottom: 16 }}>
+          <Form.Item name="requestReason" label={intl.formatMessage({ id: 'request.create.form.requestReason' })} rules={[{ required: true }]}>
+            <TextArea rows={4} />
           </Form.Item>
         </Card>
 
-        <Card title="Analysis Items" style={{ marginBottom: 16 }}>
-          <Form.Item name="analysisItems" label="Select Analysis Items" rules={[{ required: true }]}>
+        <Card title={intl.formatMessage({ id: 'request.create.analysisItems' })} style={{ marginBottom: 16 }}>
+          <Form.Item name="analysisItems" label={intl.formatMessage({ id: 'request.create.form.selectItems' })} rules={[{ required: true }]}>
             <Cascader
               style={{ width: '100%' }}
               options={cascadeData}
               multiple
-              placeholder="Test Group → Analysis Type → Analysis Item"
               onChange={handleItemSelect}
             />
           </Form.Item>
@@ -325,16 +325,16 @@ const RequestCreate: React.FC = () => {
               size="small"
               pagination={false}
               columns={[
-                { title: 'Item', dataIndex: 'name' },
-                { title: 'Standards', dataIndex: 'testStandards' },
-                { title: 'Cost', dataIndex: 'cost', render: (v) => v ?? '-' },
-                { title: 'Unit Price', dataIndex: 'unitPrice', render: (v) => v ?? '-' },
-                { title: 'Unit', dataIndex: 'unit', render: (v) => v ?? '-' },
+                { title: intl.formatMessage({ id: 'request.create.table.item' }), dataIndex: 'name' },
+                { title: intl.formatMessage({ id: 'request.create.table.standards' }), dataIndex: 'testStandards' },
+                { title: intl.formatMessage({ id: 'request.create.table.cost' }), dataIndex: 'cost', render: (v) => v ?? '-' },
+                { title: intl.formatMessage({ id: 'request.create.table.unitPrice' }), dataIndex: 'unitPrice', render: (v) => v ?? '-' },
+                { title: intl.formatMessage({ id: 'request.create.table.unit' }), dataIndex: 'unit', render: (v) => v ?? '-' },
               ]}
               summary={() => (
                 <Table.Summary.Row>
                   <Table.Summary.Cell index={0} colSpan={3}>
-                    <Text strong>Total Cost</Text>
+                    <Text strong>{intl.formatMessage({ id: 'request.create.totalCost' })}</Text>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={1} colSpan={2}>
                     <Text strong>{totalCost.toFixed(2)}</Text>
@@ -347,9 +347,9 @@ const RequestCreate: React.FC = () => {
 
         <Space>
           <Button type="primary" htmlType="submit" size="large">
-            Submit Request
+            {intl.formatMessage({ id: 'request.create.submit' })}
           </Button>
-          <Button onClick={() => history.back()}>Cancel</Button>
+          <Button onClick={() => history.back()}>{intl.formatMessage({ id: 'common.cancel' })}</Button>
         </Space>
       </Form>
     </PageContainer>

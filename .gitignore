@@ -43,5 +43,9 @@ postgres_data/
 # Playwright E2E snapshots
 .playwright-cli/
 
+# Playwright HTML/JUnit report output
+playwright-report/
+test-results/
+
 # UAT test output
 uat-out/

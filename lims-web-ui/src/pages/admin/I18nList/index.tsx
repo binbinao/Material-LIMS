@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { useIntl } from '@umijs/max';
 import { getI18nMessages, upsertI18nMessage, deleteI18nMessage } from '@/services/requestService';
 
-interface Row { messageKey: string; zhCN?: string; enUS?: string; }
+interface IRow { messageKey: string; zhCN?: string; enUS?: string; }
 
 /** Merge zh-CN + en-US two-locale dictionary into a single row. */
 async function loadMerged(): Promise<Row[]> {

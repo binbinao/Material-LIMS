@@ -1,17 +1,11 @@
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Button, Modal, Form, Input, DatePicker, Select, App, Tag, Upload } from 'antd';
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import { Button, Modal, Form, Input, DatePicker, Select, App, Tag } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useRef, useState } from 'react';
 import { useIntl } from '@umijs/max';
 import { getHolidays, createHoliday, deleteHoliday } from '@/services/requestService';
 import dayjs from 'dayjs';
-
-const holidayTypeMap: Record<string, { color: string; text: string }> = {
-  NATIONAL: { color: 'red', text: 'National' },
-  COMPANY: { color: 'blue', text: 'Company' },
-  MAKEUP: { color: 'green', text: 'Makeup Work' },
-};
 
 const HolidayList: React.FC = () => {
   const actionRef = useRef<any>();
@@ -20,17 +14,27 @@ const HolidayList: React.FC = () => {
   const { message } = App.useApp();
   const intl = useIntl();
 
+  const holidayTypes = [
+    { value: 'NATIONAL', label: intl.formatMessage({ id: 'basicData.holiday.type.national', defaultMessage: 'National' }) },
+    { value: 'COMPANY', label: intl.formatMessage({ id: 'basicData.holiday.type.company', defaultMessage: 'Company' }) },
+    { value: 'MAKEUP', label: intl.formatMessage({ id: 'basicData.holiday.type.makeup', defaultMessage: 'Makeup Work' }) },
+  ];
+
+  const holidayColor: Record<string, string> = { NATIONAL: 'red', COMPANY: 'blue', MAKEUP: 'green' };
+
+  const getTypeLabel = (t: string) => {
+    const ht = holidayTypes.find((h) => h.value === t);
+    return ht?.label || t;
+  };
+
   const columns: ProColumns[] = [
+    { title: intl.formatMessage({ id: 'common.status' }), dataIndex: 'date', width: 130, render: (v: string) => dayjs(v).format('YYYY-MM-DD') },
+    { title: intl.formatMessage({ id: 'equipment.name' }), dataIndex: 'name', width: 200 },
     {
-      title: 'Date', dataIndex: 'date', width: 130,
-      render: (v: string) => dayjs(v).format('YYYY-MM-DD'),
-    },
-    { title: 'Name', dataIndex: 'name', width: 200 },
-    {
-      title: 'Type', dataIndex: 'type', width: 120,
+      title: intl.formatMessage({ id: 'common.status' }), dataIndex: 'type', width: 120,
       valueType: 'select',
-      valueEnum: Object.fromEntries(Object.entries(holidayTypeMap).map(([k, v]) => [k, { text: v.text }])),
-      render: (_, record: any) => <Tag color={holidayTypeMap[record.type]?.color}>{holidayTypeMap[record.type]?.text || record.type}</Tag>,
+      valueEnum: Object.fromEntries(holidayTypes.map(({ value, label }) => [value, { text: label }])),
+      render: (_, record: any) => <Tag color={holidayColor[record.type]}>{getTypeLabel(record.type)}</Tag>,
     },
     {
       title: intl.formatMessage({ id: 'common.operation' }),
@@ -38,10 +42,10 @@ const HolidayList: React.FC = () => {
       render: (_, record: any) => [
         <a key="delete" onClick={() => {
           Modal.confirm({
-            title: `Delete "${record.name}"?`,
-            onOk: async () => { await deleteHoliday(record.id); message.success('Deleted'); actionRef.current?.reload(); },
+            title: `${intl.formatMessage({ id: 'common.delete' })} "${record.name}"?`,
+            onOk: async () => { await deleteHoliday(record.id); message.success(intl.formatMessage({ id: 'common.success' })); actionRef.current?.reload(); },
           });
-        }}>Delete</a>,
+        }}>{intl.formatMessage({ id: 'common.delete' })}</a>,
       ],
     },
   ];
@@ -64,7 +68,7 @@ const HolidayList: React.FC = () => {
             const result = await getHolidays({ page: params.current, size: params.pageSize, type: params.type });
             return { data: result?.data?.records ?? [], total: result?.data?.total ?? 0, success: result?.code === 200 };
           } catch (e: any) {
-          message.error(e?.message || 'Load failed');
+          message.error(e?.message || intl.formatMessage({ id: 'common.fail' }));
           return { data: [], total: 0, success: false };
         }
         }}
@@ -76,14 +80,14 @@ const HolidayList: React.FC = () => {
         ]}
       />
       <Modal
-        title="Add Holiday" open={modalVisible} onOk={handleSubmit}
+        title={intl.formatMessage({ id: 'basicData.holiday.add' })} open={modalVisible} onOk={handleSubmit}
         onCancel={() => { setModalVisible(false); form.resetFields(); }}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="date" label="Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-          <Form.Item name="name" label="Holiday Name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="type" label="Type" rules={[{ required: true }]}>
-            <Select options={Object.entries(holidayTypeMap).map(([k, v]) => ({ value: k, label: v.text }))} />
+          <Form.Item name="date" label={intl.formatMessage({ id: 'common.status' })} rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="name" label={intl.formatMessage({ id: 'equipment.name' })} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="type" label={intl.formatMessage({ id: 'common.status' })} rules={[{ required: true }]}>
+            <Select options={holidayTypes} />
           </Form.Item>
         </Form>
       </Modal>

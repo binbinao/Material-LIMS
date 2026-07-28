@@ -1,0 +1,318 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Material LIMS - 生产监控仪表板",
+    "tags": ["lims", "spring-boot", "postgresql", "redis", "minio"],
+    "timezone": "Asia/Shanghai",
+    "panels": [
+      {
+        "id": 1,
+        "title": "应用健康状态",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"lims-backend\"}",
+            "legendFormat": "应用状态"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "HTTP请求QPS",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_seconds_count{job=\"lims-backend\"}[5m])",
+            "legendFormat": "{{method}} {{uri}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "HTTP响应时间分布",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"lims-backend\"}[5m])) by (le))",
+            "legendFormat": "P95响应时间"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"lims-backend\"}[5m])) by (le))",
+            "legendFormat": "P99响应时间"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "HTTP错误率",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_seconds_count{job=\"lims-backend\", status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{job=\"lims-backend\"}[5m])) * 100",
+            "legendFormat": "5xx错误率"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "JVM内存使用",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{job=\"lims-backend\", area=\"heap\"}",
+            "legendFormat": "堆内存使用"
+          },
+          {
+            "expr": "jvm_memory_max_bytes{job=\"lims-backend\", area=\"heap\"}",
+            "legendFormat": "堆内存上限"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "数据库连接池",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "hikaricp_connections_active{job=\"lims-backend\"}",
+            "legendFormat": "活跃连接"
+          },
+          {
+            "expr": "hikaricp_connections_idle{job=\"lims-backend\"}",
+            "legendFormat": "空闲连接"
+          },
+          {
+            "expr": "hikaricp_connections_max{job=\"lims-backend\"}",
+            "legendFormat": "最大连接数"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "PostgreSQL性能指标",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "pg_stat_database_xact_commit{datname=\"lims\"}",
+            "legendFormat": "事务提交数"
+          },
+          {
+            "expr": "pg_stat_database_xact_rollback{datname=\"lims\"}",
+            "legendFormat": "事务回滚数"
+          },
+          {
+            "expr": "pg_stat_database_tup_fetched{datname=\"lims\"}",
+            "legendFormat": "行获取数"
+          },
+          {
+            "expr": "pg_stat_database_tup_inserted{datname=\"lims\"}",
+            "legendFormat": "行插入数"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 8,
+        "title": "Redis缓存命中率",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "redis_keyspace_hits_total{job=\"redis\"}",
+            "legendFormat": "缓存命中"
+          },
+          {
+            "expr": "redis_keyspace_misses_total{job=\"redis\"}",
+            "legendFormat": "缓存未命中"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 9,
+        "title": "MinIO存储使用",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "minio_bucket_usage_total_bytes{bucket=\"lims\"}",
+            "legendFormat": "存储使用量"
+          },
+          {
+            "expr": "minio_bucket_objects_total{bucket=\"lims\"}",
+            "legendFormat": "对象数量"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 10,
+        "title": "系统资源使用",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "process_cpu_usage{job=\"lims-backend\"}",
+            "legendFormat": "CPU使用率"
+          },
+          {
+            "expr": "process_resident_memory_bytes{job=\"lims-backend\"}",
+            "legendFormat": "内存使用"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": [
+        {
+          "name": "job",
+          "type": "query",
+          "query": "label_values(up, job)",
+          "refresh": 1,
+          "includeAll": false,
+          "multi": false,
+          "current": {
+            "text": "lims-backend",
+            "value": "lims-backend"
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "告警事件",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "step": "30s"
+        }
+      ]
+    },
+    "refresh": "30s",
+    "schemaVersion": 37,
+    "version": 1,
+    "uid": "material-lims-dashboard"
+  },
+  "folderId": 0,
+  "message": "Material LIMS生产监控仪表板",
+  "overwrite": false
+}

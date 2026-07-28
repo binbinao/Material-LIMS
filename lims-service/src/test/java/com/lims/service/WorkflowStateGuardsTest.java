@@ -39,22 +39,22 @@ class WorkflowStateGuardsTest {
     @Test
     void completeRequestGuardsOnNonApprovingState() throws Exception {
         String src = readSource(
-                "lims-service/src/main/java/com/lims/service/RequestService.java");
+                "lims-service/src/main/java/com/lims/service/RequestCommandService.java");
         String body = methodBody(src, "public void completeRequest", 1500);
         boolean hasStateGuard = body.contains("APPROVING.getValue().equals(request.getStatus())")
                 && body.contains("REQUEST_STATUS_INVALID");
         assertTrue(hasStateGuard,
-                "RequestService.completeRequest must reject when status != APPROVING " +
+                "RequestCommandService.completeRequest must reject when status != APPROVING " +
                         "and throw REQUEST_STATUS_INVALID (review H1).");
     }
 
     @Test
     void completeRequestHasServiceRoleGuard() throws Exception {
         String src = readSource(
-                "lims-service/src/main/java/com/lims/service/RequestService.java");
+                "lims-service/src/main/java/com/lims/service/RequestCommandService.java");
         String body = methodBody(src, "public void completeRequest", 1500);
         assertTrue(body.contains("requireRequestRole("),
-                "RequestService.completeRequest must call requireRequestRole for " +
+                "RequestCommandService.completeRequest must call requireRequestRole for " +
                         "defense-in-depth (review H1).");
     }
 
@@ -63,24 +63,24 @@ class WorkflowStateGuardsTest {
     @Test
     void rejectRequestGuardsOnTerminalStates() throws Exception {
         String src = readSource(
-                "lims-service/src/main/java/com/lims/service/RequestService.java");
+                "lims-service/src/main/java/com/lims/service/RequestCommandService.java");
         String body = methodBody(src, "public void rejectRequest", 1500);
         boolean blocksCompleted = body.contains("COMPLETED.getValue().equals(current)");
         boolean blocksAlreadyRejected = body.contains("REJECTED.getValue().equals(current)");
         boolean throwsOnTerminal = body.contains("REQUEST_STATUS_INVALID")
                 && body.contains("terminal state");
         assertTrue(blocksCompleted && blocksAlreadyRejected && throwsOnTerminal,
-                "RequestService.rejectRequest must refuse re-flipping a COMPLETED or " +
+                "RequestCommandService.rejectRequest must refuse re-flipping a COMPLETED or " +
                         "already-REJECTED request (review H2).");
     }
 
     @Test
     void rejectRequestHasServiceRoleGuard() throws Exception {
         String src = readSource(
-                "lims-service/src/main/java/com/lims/service/RequestService.java");
+                "lims-service/src/main/java/com/lims/service/RequestCommandService.java");
         String body = methodBody(src, "public void rejectRequest", 1500);
         assertTrue(body.contains("requireRequestRole("),
-                "RequestService.rejectRequest must call requireRequestRole for " +
+                "RequestCommandService.rejectRequest must call requireRequestRole for " +
                         "defense-in-depth (review H2).");
     }
 
@@ -103,9 +103,9 @@ class WorkflowStateGuardsTest {
     @Test
     void requireRequestRoleHelperExists() throws Exception {
         String src = readSource(
-                "lims-service/src/main/java/com/lims/service/RequestService.java");
+                "lims-service/src/main/java/com/lims/service/RequestCommandService.java");
         assertTrue(src.contains("private void requireRequestRole("),
-                "RequestService.requireRequestRole(String...) helper must exist for " +
+                "RequestCommandService.requireRequestRole(String...) helper must exist for " +
                         "the H1/H2 service-layer role guards.");
     }
 }

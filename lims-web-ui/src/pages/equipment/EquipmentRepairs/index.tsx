@@ -3,6 +3,7 @@ import { ProTable } from '@ant-design/pro-components';
 import { Button, Modal, Form, Input, Select, InputNumber, App, Tag, Space, Popconfirm } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useRef, useState } from 'react';
+import { useIntl } from '@umijs/max';
 import {
   getEquipmentRepairs,
   createEquipmentRepair,
@@ -18,6 +19,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const EquipmentRepairs: React.FC = () => {
+  const intl = useIntl();
   const actionRef = useRef<any>();
   const [createOpen, setCreateOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -39,12 +41,12 @@ const EquipmentRepairs: React.FC = () => {
     const values = await createForm.validateFields();
     try {
       await createEquipmentRepair(values);
-      message.success('Repair record created; equipment marked as UNDER_REPAIR');
+      message.success(intl.formatMessage({ id: 'common.success' }));
       setCreateOpen(false);
       createForm.resetFields();
       actionRef.current?.reload();
     } catch (e: any) {
-      message.error(e?.message || 'Failed');
+      message.error(e?.message || intl.formatMessage({ id: 'common.fail' }));
     }
   };
 
@@ -52,43 +54,43 @@ const EquipmentRepairs: React.FC = () => {
     const values = await completeForm.validateFields();
     try {
       await completeEquipmentRepair(activeRecord.id, values);
-      message.success('Repair completed');
+      message.success(intl.formatMessage({ id: 'common.success' }));
       setCompleteOpen(false);
       completeForm.resetFields();
       actionRef.current?.reload();
     } catch (e: any) {
-      message.error(e?.message || 'Failed');
+      message.error(e?.message || intl.formatMessage({ id: 'common.fail' }));
     }
   };
 
   const columns: ProColumns[] = [
-    { title: 'Report Date', dataIndex: 'reportDate', width: 120, valueType: 'date' },
-    { title: 'Equipment', dataIndex: 'equipmentId', width: 200, search: false },
-    { title: 'Fault', dataIndex: 'faultDescription', ellipsis: true, search: false },
-    { title: 'Reported By', dataIndex: 'reportedBy', width: 120, search: false },
+    { title: intl.formatMessage({ id: 'repair.reportDate' }), dataIndex: 'reportDate', width: 120, valueType: 'date' },
+    { title: intl.formatMessage({ id: 'equipment.name' }), dataIndex: 'equipmentId', width: 200, search: false },
+    { title: intl.formatMessage({ id: 'repair.fault' }), dataIndex: 'faultDescription', ellipsis: true, search: false },
+    { title: intl.formatMessage({ id: 'repair.reportedBy' }), dataIndex: 'reportedBy', width: 120, search: false },
     {
-      title: 'Status', dataIndex: 'status', width: 110,
+      title: intl.formatMessage({ id: 'common.status' }), dataIndex: 'status', width: 110,
       valueType: 'select',
       valueEnum: {
-        REPORTING: { text: 'Reporting' },
-        REPAIRING: { text: 'Repairing' },
-        COMPLETED: { text: 'Completed' },
+        REPORTING: { text: intl.formatMessage({ id: 'repair.status.REPORTING' }) },
+        REPAIRING: { text: intl.formatMessage({ id: 'repair.status.REPAIRING' }) },
+        COMPLETED: { text: intl.formatMessage({ id: 'repair.status.COMPLETED' }) },
       },
-      render: (_, r: any) => <Tag color={STATUS_COLOR[r.status] || 'default'}>{r.status}</Tag>,
+      render: (_: any, r: any) => <Tag color={STATUS_COLOR[r.status] || 'default'}>{intl.formatMessage({ id: `repair.status.${r.status}`, defaultMessage: r.status })}</Tag>,
     },
-    { title: 'Repair Cost', dataIndex: 'repairCost', width: 110, valueType: 'money', search: false },
-    { title: 'Completion', dataIndex: 'completionDate', width: 120, valueType: 'date', search: false },
+    { title: intl.formatMessage({ id: 'repair.cost' }), dataIndex: 'repairCost', width: 110, valueType: 'money', search: false },
+    { title: intl.formatMessage({ id: 'repair.completionDate' }), dataIndex: 'completionDate', width: 120, valueType: 'date', search: false },
     {
-      title: 'Action', valueType: 'option', width: 160, fixed: 'right',
-      render: (_, r: any) => [
+      title: intl.formatMessage({ id: 'common.operation' }), valueType: 'option', width: 160, fixed: 'right',
+      render: (_: any, r: any) => [
         r.status !== 'COMPLETED' && (
-          <a key="complete" onClick={() => { setActiveRecord(r); setCompleteOpen(true); }}>Complete</a>
+          <a key="complete" onClick={() => { setActiveRecord(r); setCompleteOpen(true); }}>{intl.formatMessage({ id: 'repair.complete' })}</a>
         ),
-        <Popconfirm key="del" title="Delete this repair record?" onConfirm={async () => {
+        <Popconfirm key="del" title={intl.formatMessage({ id: 'equipment.repairs.deleteConfirm' })} onConfirm={async () => {
           await deleteEquipmentRepair(r.id);
-          message.success('Deleted');
+          message.success(intl.formatMessage({ id: 'common.success' }));
           actionRef.current?.reload();
-        }}><a style={{ color: '#f5222d' }}>Delete</a></Popconfirm>,
+        }}><a style={{ color: '#f5222d' }}>{intl.formatMessage({ id: 'common.delete' })}</a></Popconfirm>,
       ].filter(Boolean),
     },
   ];
@@ -105,43 +107,43 @@ const EquipmentRepairs: React.FC = () => {
             const r = await getEquipmentRepairs({ page: (params.current || 1) - 1, size: params.pageSize, status: params.status });
             return { data: r?.data?.records ?? [], total: r?.data?.total ?? 0, success: r?.code === 200 };
           } catch (e: any) {
-          message.error(e?.message || 'Load failed');
+          message.error(e?.message || intl.formatMessage({ id: 'common.fail' }));
           return { data: [], total: 0, success: false };
         }
         }}
         search={{ labelWidth: 'auto' }}
         toolBarRender={() => [
           <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => { loadEquipments(); setCreateOpen(true); }}>
-            Report Repair
+            {intl.formatMessage({ id: 'repair.report' })}
           </Button>,
         ]}
       />
 
-      <Modal title="Report Equipment Repair" open={createOpen}
+      <Modal title={intl.formatMessage({ id: 'equipment.repairs.report.title' })} open={createOpen}
         onOk={handleCreate} onCancel={() => { setCreateOpen(false); createForm.resetFields(); }}
         destroyOnClose>
         <Form form={createForm} layout="vertical">
-          <Form.Item name="equipmentId" label="Equipment" rules={[{ required: true }]}>
-            <Select showSearch options={equipmentOptions} placeholder="Select equipment" optionFilterProp="label" />
+          <Form.Item name="equipmentId" label={intl.formatMessage({ id: 'equipment.name' })} rules={[{ required: true }]}>
+            <Select showSearch options={equipmentOptions} placeholder={intl.formatMessage({ id: 'common.search' })} optionFilterProp="label" />
           </Form.Item>
-          <Form.Item name="faultDescription" label="Fault Description" rules={[{ required: true }]}>
+          <Form.Item name="faultDescription" label={intl.formatMessage({ id: 'repair.fault' })} rules={[{ required: true }]}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="reportedBy" label="Reported By"><Input /></Form.Item>
+          <Form.Item name="reportedBy" label={intl.formatMessage({ id: 'repair.reportedBy' })}><Input /></Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="Complete Repair" open={completeOpen}
+      <Modal title={intl.formatMessage({ id: 'equipment.repairs.complete.title' })} open={completeOpen}
         onOk={handleComplete} onCancel={() => { setCompleteOpen(false); completeForm.resetFields(); }}
         destroyOnClose>
         <Form form={completeForm} layout="vertical">
-          <Form.Item name="repairAction" label="Repair Action" rules={[{ required: true }]}>
+          <Form.Item name="repairAction" label={intl.formatMessage({ id: 'repair.action' })} rules={[{ required: true }]}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="repairCost" label="Repair Cost (¥)">
+          <Form.Item name="repairCost" label={intl.formatMessage({ id: 'repair.cost' }) + ' (¥)'}>
             <InputNumber style={{ width: '100%' }} min={0} precision={2} />
           </Form.Item>
-          <Form.Item name="repairedBy" label="Repaired By"><Input /></Form.Item>
+          <Form.Item name="repairedBy" label={intl.formatMessage({ id: 'repair.repairedBy' })}><Input /></Form.Item>
         </Form>
       </Modal>
     </>
