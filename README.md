@@ -1,3 +1,5 @@
+> 📄 **Deep-dive case study with metrics, highlights, and architecture**: [binbinao.github.io/resume/projects/material-lims/](https://binbinao.github.io/resume/projects/material-lims/)
+
 # Material LIMS - 材料实验室信息管理系统
 
 Material Laboratory Information Management System，服务于材料实验的委托、分析、报告全流程管理。
