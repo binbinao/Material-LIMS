@@ -1,5 +1,7 @@
 package com.lims.service.sync;
 
+import com.lims.service.sharepoint.SharePointException;
+import com.lims.service.sharepoint.SharePointProperties;
 import com.microsoft.aad.msal4j.ClientCredentialFactory;
 import com.microsoft.aad.msal4j.ClientCredentialParameters;
 import com.microsoft.aad.msal4j.ConfidentialClientApplication;
@@ -10,10 +12,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -27,7 +32,9 @@ import java.util.concurrent.CompletableFuture;
 public class MicrosoftGraphClient {
 
     private static final String GRAPH_DEFAULT_SCOPE = "https://graph.microsoft.com/.default";
-    private static final String GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+
+    @Value("${azure.ad.graph-base-url:https://graph.microsoft.com/v1.0}")
+    private String graphBaseUrl;
 
     @Value("${azure.ad.tenant-id}")
     private String tenantId;
@@ -38,9 +45,22 @@ public class MicrosoftGraphClient {
     @Value("${azure.ad.client-secret}")
     private String clientSecret;
 
+    @Value("${sharepoint.drive-id:}")
+    private String configuredDriveId;
+
+    @Value("${sharepoint.hostname:}")
+    private String sharePointHostname;
+
+    @Value("${sharepoint.site-path:/sites/lims}")
+    private String sharePointSitePath;
+
+    @Value("${sharepoint.library:Documents}")
+    private String sharePointLibrary;
+
     private final RestTemplate restTemplate;
     private volatile String cachedToken;
     private volatile long tokenExpiresAtEpochMs;
+    private volatile String driveIdCache;
 
     public MicrosoftGraphClient(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
@@ -79,7 +99,7 @@ public class MicrosoftGraphClient {
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listUsers() {
-        String url = GRAPH_BASE + "/users?$select=id,displayName,mail,userPrincipalName,jobTitle,department&$top=999";
+        String url = graphBaseUrl + "/users?$select=id,displayName,mail,userPrincipalName,jobTitle,department&$top=999";
         List<Map<String, Object>> all = new ArrayList<>();
         while (url != null) {
             Map<String, Object> body = doGet(url);
@@ -101,7 +121,7 @@ public class MicrosoftGraphClient {
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listGroups() {
-        String url = GRAPH_BASE + "/groups?$select=id,displayName,description&$top=999";
+        String url = graphBaseUrl + "/groups?$select=id,displayName,description&$top=999";
         List<Map<String, Object>> all = new ArrayList<>();
         while (url != null) {
             Map<String, Object> body = doGet(url);
@@ -118,6 +138,101 @@ public class MicrosoftGraphClient {
         return all;
     }
 
+    /**
+     * Resolve the drive id for the configured SharePoint site + library.
+     * Uses configuredDriveId if non-blank; otherwise resolves via /sites/.../drives.
+     */
+    public synchronized String resolveDriveId() {
+        if (configuredDriveId != null && !configuredDriveId.isBlank()) {
+            return configuredDriveId;
+        }
+        if (driveIdCache != null) {
+            return driveIdCache;
+        }
+        String siteUrl = graphBaseUrl + "/sites/" + sharePointHostname + ":" + sharePointSitePath + "?$select=id";
+        Map<String, Object> site = doGet(siteUrl);
+        String siteId = (String) site.get("id");
+        if (siteId == null) {
+            throw new SharePointException("Graph site resolution failed: no id in response");
+        }
+        String drivesUrl = graphBaseUrl + "/sites/" + siteId + "/drives?$filter=" + encodeODataFilter("name eq '" + sharePointLibrary + "'");
+        Map<String, Object> drivesResp = doGet(drivesUrl);
+        Object value = drivesResp.get("value");
+        if (!(value instanceof List<?> list) || list.isEmpty()) {
+            throw new SharePointException("Graph drives: no drive matching library '" + sharePointLibrary + "'");
+        }
+        Object first = list.get(0);
+        if (!(first instanceof Map)) {
+            throw new SharePointException("Graph drives: malformed response");
+        }
+        Object id = ((Map<?, ?>) first).get("id");
+        if (id == null) {
+            throw new SharePointException("Graph drives: first item has no id");
+        }
+        driveIdCache = id.toString();
+        return driveIdCache;
+    }
+
+    /**
+     * PUT a docx (or other binary) into drive root at the given path. Returns driveItem JSON.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> putDriveItemContent(String driveId, String parentPath, String filename,
+                                                   byte[] body, String contentType) {
+        String url = graphBaseUrl + "/drives/" + driveId + "/root:/" + encodeGraphPath(parentPath) + encodeGraphPath(filename) + ":/content";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(getAccessToken());
+        headers.setContentType(MediaType.parseMediaType(contentType));
+        ResponseEntity<Map> resp = restTemplate.exchange(url, HttpMethod.PUT, new HttpEntity<>(body, headers), Map.class);
+        if (resp.getBody() == null) {
+            throw new SharePointException("Graph PUT returned empty body");
+        }
+        return (Map<String, Object>) resp.getBody();
+    }
+
+    /**
+     * GET a driveItem by id. `select` should be a comma-separated field list, e.g. "webUrl".
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getDriveItem(String driveId, String itemId, String select) {
+        String url = graphBaseUrl + "/drives/" + driveId + "/items/" + itemId;
+        if (select != null && !select.isBlank()) {
+            url += "?$select=" + select;
+        }
+        ResponseEntity<Map> resp = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(bearerHeaders()), Map.class);
+        if (resp.getBody() == null) {
+            throw new SharePointException("Graph GET item returned empty body");
+        }
+        return (Map<String, Object>) resp.getBody();
+    }
+
+    /**
+     * GET a driveItem by parent path + filename. Used for 409-conflict fallback.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getDriveItemByPath(String driveId, String parentPath, String filename) {
+        String url = graphBaseUrl + "/drives/" + driveId + "/root:/" + encodeGraphPath(parentPath) + encodeGraphPath(filename);
+        ResponseEntity<Map> resp = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(bearerHeaders()), Map.class);
+        if (resp.getBody() == null) {
+            throw new SharePointException("Graph GET item-by-path returned empty body");
+        }
+        return (Map<String, Object>) resp.getBody();
+    }
+
+    /**
+     * Download the content of a driveItem.
+     */
+    public byte[] getDriveItemContent(String driveId, String itemId) {
+        String url = graphBaseUrl + "/drives/" + driveId + "/items/" + itemId + "/content";
+        try {
+            ResponseEntity<byte[]> resp = restTemplate.exchange(url, HttpMethod.GET,
+                new HttpEntity<>(bearerHeaders()), byte[].class);
+            return resp.getBody();
+        } catch (Exception e) {
+            throw new SharePointException("Graph download failed: " + e.getMessage(), e);
+        }
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Map<String, Object> doGet(String url) {
         HttpHeaders headers = new HttpHeaders();
@@ -127,5 +242,30 @@ public class MicrosoftGraphClient {
             return Collections.emptyMap();
         }
         return (Map<String, Object>) resp.getBody();
+    }
+
+    private HttpHeaders bearerHeaders() {
+        HttpHeaders h = new HttpHeaders();
+        h.setBearerAuth(getAccessToken());
+        return h;
+    }
+
+    private static String urlEncode(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    /**
+     * Encode a single path segment for a Graph drive path. Encodes characters that would otherwise
+     * confuse the URL parser, but preserves '/' so segment boundaries stay readable.
+     */
+    private static String encodeGraphPath(String segment) {
+        if (segment == null || segment.isEmpty()) return "";
+        return URLEncoder.encode(segment, StandardCharsets.UTF_8)
+            .replace("+", "%20")
+            .replace("%2F", "/");
+    }
+
+    private static String encodeODataFilter(String filter) {
+        return URLEncoder.encode(filter, StandardCharsets.UTF_8).replace("+", "%20");
     }
 }

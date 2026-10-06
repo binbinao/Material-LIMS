@@ -15,6 +15,9 @@ import com.lims.model.enums.RequestStatus;
 import com.lims.service.report.ReportTemplateService;
 import com.lims.service.report.SampleReportBuilder;
 import com.lims.service.report.WordToPdfConverter;
+import com.lims.service.sharepoint.SharePointClient;
+import com.lims.service.sharepoint.SharePointException;
+import com.lims.service.sharepoint.SharePointPathResolver;
 import com.lims.service.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -41,6 +45,8 @@ public class ReportService {
     private final ReportTemplateService reportTemplateService;
     private final WordToPdfConverter wordToPdfConverter;
     private final FileStorageService fileStorageService;
+    private final SharePointClient sharePointClient;
+    private final SharePointPathResolver sharePointPathResolver;
 
     @org.springframework.beans.factory.annotation.Value("${lims.demo.enabled:false}")
     private boolean demoEnabled;
@@ -107,6 +113,18 @@ public class ReportService {
             Path docx = reportTemplateService.generate(requestId, reportNo, report.getVersionNumber(), null);
             String docxUrl = fileStorageService.upload(docx, "reports/" + requestId);
             report.setFileUrl(docxUrl);
+
+            // SharePoint upload: optional, failures must not roll back the local record.
+            try {
+                if (sharePointClient.isEnabled()) {
+                    var spPath = sharePointPathResolver.resolve(parent, report);
+                    var spResult = sharePointClient.uploadDocx(docx.toString(), spPath);
+                    report.setSharepointFileId(spResult.fileId());
+                    report.setSharepointEditUrl(spResult.editUrl());
+                }
+            } catch (SharePointException e) {
+                log.warn("SharePoint upload failed (local report kept): {}", e.getMessage());
+            }
 
             Path pdf = wordToPdfConverter.convert(docx);
             if (pdf != null) {
@@ -243,6 +261,21 @@ public class ReportService {
             Path docx = reportTemplateService.generate(report.getRequestId(), reportNo, newVersion, revisionNote);
             String docxUrl = fileStorageService.upload(docx, "reports/" + report.getRequestId());
             report.setFileUrl(docxUrl);
+
+            try {
+                if (sharePointClient.isEnabled()) {
+                    Request parentForPath = requestMapper.selectById(report.getRequestId());
+                    if (parentForPath != null) {
+                        var spPath = sharePointPathResolver.resolve(parentForPath, report);
+                        var spResult = sharePointClient.uploadDocx(docx.toString(), spPath);
+                        report.setSharepointFileId(spResult.fileId());
+                        report.setSharepointEditUrl(spResult.editUrl());
+                    }
+                }
+            } catch (SharePointException e) {
+                log.warn("SharePoint upload on revise failed (local report kept): {}", e.getMessage());
+            }
+
             Path pdf = wordToPdfConverter.convert(docx);
             if (pdf != null) {
                 report.setPdfUrl(fileStorageService.upload(pdf, "reports/" + report.getRequestId()));
@@ -257,12 +290,16 @@ public class ReportService {
     }
 
     /**
-     * Get M365 online edit URL
+     * Get M365 online edit URL. Returns null when SharePoint integration is not active
+     * (NoOpSharePointClient) or the report has no SharePoint metadata yet.
      */
     public String getEditUrl(String reportId) {
         Report report = reportMapper.selectById(reportId);
         if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
-        return report.getSharepointEditUrl();
+        if (!sharePointClient.isEnabled() || report.getSharepointFileId() == null) {
+            return null;
+        }
+        return sharePointClient.composeEditUrl(report.getSharepointFileId());
     }
 
     /**
@@ -294,17 +331,35 @@ public class ReportService {
     /**
      * Sync report content from SharePoint.
      *
-     * Issue #84: In production, throws instead of silently no-op'ing.
+     * Replaces the previous dev-only no-op (issue #84) with a real implementation that
+     * downloads the docx from SharePoint, writes it locally, regenerates the PDF, and
+     * updates file_url / pdf_url. Failures are logged but do not throw — the local
+     * record remains usable.
      */
     @Transactional(rollbackFor = Exception.class)
     public void syncFromSharePoint(String reportId) {
         Report report = reportMapper.selectById(reportId);
         if (report == null) throw new BusinessException(ErrorCode.DATA_NOT_FOUND);
-        if (!demoEnabled) {
-            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED,
-                    "SharePoint sync is not configured in this environment");
+        if (report.getSharepointFileId() == null) {
+            log.warn("Sync requested for reportId={} but no sharepointFileId — no-op", reportId);
+            return;
         }
-        log.info("Sync from SharePoint requested: reportId={}", reportId);
+        try {
+            byte[] body = sharePointClient.downloadDocx(report.getSharepointFileId());
+            Path tmp = Files.createTempFile("lims-sharepoint-sync-" + reportId, ".docx");
+            Files.write(tmp, body);
+            String newUrl = fileStorageService.upload(tmp, "reports/" + report.getRequestId());
+            report.setFileUrl(newUrl);
+            Path pdf = wordToPdfConverter.convert(tmp);
+            if (pdf != null) {
+                report.setPdfUrl(fileStorageService.upload(pdf, "reports/" + report.getRequestId()));
+            }
+            reportMapper.updateById(report);
+            log.info("Synced SharePoint content into local report: reportId={}, fileId={}",
+                reportId, report.getSharepointFileId());
+        } catch (SharePointException | java.io.IOException e) {
+            log.warn("SharePoint sync failed (file_url unchanged): {}", e.getMessage());
+        }
     }
 
     private void validateReportOwnership(Report report, String reportId, String userId) {

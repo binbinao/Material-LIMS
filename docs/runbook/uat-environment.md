@@ -91,6 +91,23 @@ cp .env.example .env
 #   MINIO_SECRET_KEY=minioadmin
 ```
 
+#### SharePoint(在线编辑,可选)
+
+仅当需要真实接通 Microsoft 365 编辑器时配置。dev 默认 `sharepoint.enabled=false`,`MockSharePointClient` 接管,UX 与真实环境一致。
+
+| Env var | Default | Description |
+| --- | --- | --- |
+| `SHAREPOINT_ENABLED` | `false` | 总开关。`false` → `NoOpSharePointClient`,Online Edit 按钮 disabled。 |
+| `SHAREPOINT_HOSTNAME` | _(empty)_ | 例如 `contoso.sharepoint.com`。启用时必填。 |
+| `SHAREPOINT_SITE_PATH` | `/sites/lims` | Graph site path。 |
+| `SHAREPOINT_LIBRARY` | `Documents` | 文档库名。 |
+| `SHAREPOINT_FOLDER_ROOT` | `Reports` | 库下根目录。 |
+| `SHAREPOINT_DRIVE_ID` | _(empty)_ | 可选。设置后跳过 `/sites` 解析。 |
+| `SHAREPOINT_STRATEGY` | `folder_layout` | `folder_layout` (`{root}/{YYYY}/{MM}/`) 或 `flat`。 |
+| `SHAREPOINT_EDIT_URL_SUFFIX` | `?action=edit` | 拼到 `driveItem.webUrl` 后。 |
+
+启用后还需要 `azure.ad.enabled=true` 与 `AZURE_AD_*` 凭证(见 README)。
+
 ### 3.3 启动后端(后台)
 
 ```bash

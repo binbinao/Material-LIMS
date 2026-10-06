@@ -189,6 +189,11 @@ export default {
   'report.label.submitted': 'Submitted',
   'report.label.approved': 'Approved',
   'report.label.revisionNote': 'Revision Note',
+  'report.edit.title': 'Edit Report',
+  'report.edit.unavailable': 'SharePoint online edit is not configured in this environment.',
+  'report.edit.mockHint': 'Demo preview — your edits are not persisted to a real Microsoft 365 tenant.',
+  'report.detail.onlineEdit': 'Online Edit',
+  'report.detail.sharepointUnavailable': 'SharePoint online edit is not configured for this report.',
 
   // Equipment extra
   'equipment.status.title': 'Equipment Status',
