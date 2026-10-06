@@ -1,12 +1,16 @@
+import React from 'react';
 import { PageContainer } from '@ant-design/pro-components';
-import { Card, Spin, App } from 'antd';
+import { Card, Spin, Alert, Empty, App } from 'antd';
 import { useParams, history, useIntl } from '@umijs/max';
 import { useRequest } from 'ahooks';
 import { getReportEditUrl, getReport } from '@/services/requestService';
 
+const isMockUrl = (url: string | null | undefined): boolean =>
+  !!url && url.startsWith('https://example.invalid/');
+
 const ReportEdit: React.FC = () => {
   const params = useParams<{ id: string }>();
-  const { message } = App.useApp();
+  const { message: _message } = App.useApp();
   const intl = useIntl();
 
   const { data: reportData } = useRequest(() => getReport(params.id));
@@ -23,16 +27,27 @@ const ReportEdit: React.FC = () => {
       <Card>
         {loading ? (
           <Spin tip={intl.formatMessage({ id: 'common.search' })} />
-        ) : editUrl ? (
-          <iframe
-            src={editUrl}
-            style={{ width: '100%', height: 'calc(100vh - 200px)', border: 'none' }}
-            title={intl.formatMessage({ id: 'report.edit.title' })}
+        ) : !editUrl ? (
+          <Empty
+            description={intl.formatMessage({ id: 'report.edit.unavailable' })}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          <div style={{ textAlign: 'center', padding: 48, color: '#999' }}>
-            {intl.formatMessage({ id: 'report.edit.title' })} {intl.formatMessage({ id: 'common.fail' })}
-          </div>
+          <>
+            {isMockUrl(editUrl) && (
+              <Alert
+                style={{ marginBottom: 12 }}
+                type="info"
+                showIcon
+                message={intl.formatMessage({ id: 'report.edit.mockHint' })}
+              />
+            )}
+            <iframe
+              src={editUrl}
+              style={{ width: '100%', height: 'calc(100vh - 240px)', border: 'none' }}
+              title={intl.formatMessage({ id: 'report.edit.title' })}
+            />
+          </>
         )}
       </Card>
     </PageContainer>
