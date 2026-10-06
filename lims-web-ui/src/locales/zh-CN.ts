@@ -189,6 +189,11 @@ export default {
   'report.label.submitted': '提交时间',
   'report.label.approved': '批准时间',
   'report.label.revisionNote': '修订说明',
+  'report.edit.title': '编辑报告',
+  'report.edit.unavailable': '当前环境未配置 SharePoint 在线编辑。',
+  'report.edit.mockHint': '演示预览 — 编辑内容不会持久化到真实的 Microsoft 365 租户。',
+  'report.detail.onlineEdit': '在线编辑',
+  'report.detail.sharepointUnavailable': '此报告未配置 SharePoint 在线编辑。',
 
   // Equipment extra
   'equipment.status.title': '设备状态',
