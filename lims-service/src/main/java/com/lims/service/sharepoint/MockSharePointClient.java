@@ -1,6 +1,7 @@
 package com.lims.service.sharepoint;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -33,6 +34,7 @@ public class MockSharePointClient implements SharePointClient {
     private final ConcurrentMap<String, Path> stagedFiles = new ConcurrentHashMap<>();
 
     /** Spring production wiring: derive staging dir from java.io.tmpdir. */
+    @Autowired
     public MockSharePointClient(@Value("${java.io.tmpdir:/tmp}") String tmpRoot) {
         this(Paths.get(tmpRoot, "lims-sharepoint-mock"));
     }
