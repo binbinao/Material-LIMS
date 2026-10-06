@@ -71,9 +71,9 @@ const ReportDetail: React.FC = () => {
           });
           return;
         case 'edit':
-          const editRes = await getReportEditUrl(params.id);
-          if (editRes?.data) {
-            window.open(editRes.data, '_blank');
+          // Use sharepointEditUrl already returned by getReport; no extra round-trip.
+          if (report.sharepointEditUrl) {
+            window.open(report.sharepointEditUrl, '_blank');
           }
           return;
         case 'sync':
@@ -94,8 +94,16 @@ const ReportDetail: React.FC = () => {
       case 'DRAFT':
       case 'REVISING':
         if ((access.canEngineer || access.canManager) && isAuthor) {
+          const editDisabled = !report.sharepointEditUrl;
           btns.push(
-            <Button key="edit" onClick={() => handleAction('edit')}>{intl.formatMessage({ id: 'common.edit' })}</Button>,
+            <Button
+              key="edit"
+              disabled={editDisabled}
+              title={editDisabled ? intl.formatMessage({ id: 'report.detail.sharepointUnavailable' }) : undefined}
+              onClick={() => handleAction('edit')}
+            >
+              {intl.formatMessage({ id: 'common.edit' })}
+            </Button>,
             <Button key="sync" onClick={() => handleAction('sync')}>{intl.formatMessage({ id: 'common.download' })}</Button>,
             <Button key="submit" type="primary" onClick={() => handleAction('submit')}>{intl.formatMessage({ id: 'common.submit' })}</Button>,
           );

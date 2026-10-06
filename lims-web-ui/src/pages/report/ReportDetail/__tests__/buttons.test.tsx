@@ -37,4 +37,14 @@ describe('ReportDetail buttons', () => {
       expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
     });
   });
+
+  it('disables Edit button when sharepointEditUrl is null', async () => {
+    // Default mock has no sharepointEditUrl — Edit should render disabled.
+    renderWithProviders(<ReportDetail />);
+    await waitFor(() => {
+      const editBtn = screen.getByRole('button', { name: 'Edit' });
+      expect(editBtn).toBeDisabled();
+      expect(editBtn).toHaveAttribute('title', expect.stringMatching(/sharepoint/i));
+    });
+  });
 });
