@@ -79,6 +79,17 @@ minio:
   secret-key: ${MINIO_SECRET_KEY:}
   bucket: ${MINIO_BUCKET:lims}
 
+# SharePoint document library for report .docx uploads
+sharepoint:
+  enabled: ${SHAREPOINT_ENABLED:false}
+  strategy: ${SHAREPOINT_STRATEGY:folder_layout}   # folder_layout | flat
+  hostname: ${SHAREPOINT_HOSTNAME:}
+  site-path: ${SHAREPOINT_SITE_PATH:/sites/lims}
+  library: ${SHAREPOINT_LIBRARY:Documents}
+  folder-root: ${SHAREPOINT_FOLDER_ROOT:Reports}
+  drive-id: ${SHAREPOINT_DRIVE_ID:}
+  edit-url-suffix: ${SHAREPOINT_EDIT_URL_SUFFIX:?action=edit}
+
 # External API (parts / suppliers master data)
 external:
   api:

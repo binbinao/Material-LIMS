@@ -71,6 +71,11 @@ minio:
   secret-key: minioadmin
   bucket: lims
 
+# SharePoint — dev profile keeps it disabled; the MockSharePointClient bean
+# (gated by lims.demo.enabled=true) gives the same UX without Azure creds.
+sharepoint:
+  enabled: false
+
 # External API (parts / suppliers master data)
 external:
   api:
