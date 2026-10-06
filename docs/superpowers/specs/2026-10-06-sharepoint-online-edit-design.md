@@ -44,7 +44,7 @@ The implementation is **code-complete** (real Graph SDK calls wired up) but **ru
 | `lims-web-ui/src/pages/report/ReportDetail/index.tsx` | Calls `getReportEditUrl` (button → `window.open`) and `syncReportFromSharePoint` (button) | We will gate the **Online Edit** button on `report.sharepointEditUrl` being non-null and inject an i18n-aware empty-state. |
 | `lims-web-ui/src/pages/report/ReportEdit/index.tsx` | Loads `getReportEditUrl(params.id)` → renders `<iframe src={editUrl}>` if present, otherwise a centered empty-state string | We extend the empty-state to distinguish "SharePoint not configured" from "mock preview" and add a localized message. |
 | `lims-web-ui/src/services/requestService.ts` (L227–233) | `getReportEditUrl`, `syncReportFromSharePoint` | No change. |
-| `lims-web-ui/src/locales/{en-US,zh-CN}.ts` | `common.success/fail`, `common.export/download` present; no `report.edit.*` keys yet | We add `report.edit.title` (already referenced; confirm), `report.edit.unavailable`, `report.edit.mockHint`, `report.detail.onlineEdit`. |
+| `lims-web-ui/src/locales/{en-US,zh-CN}.ts` | `common.success/fail`, `common.export/download` present; no `report.edit.*` keys yet | We add five new keys: `report.edit.title`, `report.edit.unavailable`, `report.edit.mockHint`, `report.detail.onlineEdit`, `report.detail.sharepointUnavailable`. |
 | `docs/design/material-lims-design.md` (L474–476, L776–782, L1272+, L1477–1484, L1499–1566) | Design doc already describes the loop we are closing (Graph → SharePoint → Office Online → sync). | Source of truth for path conventions. |
 | `docs/writing/2026-06-05-phase3-plan.md` (L44–50) | P3: "**SharePointService**: upload docx → take `webUrl + &action=edit`; download latest; **syncFromSharePoint**: download → upload to MinIO → convert PDF → update `file_url / pdf_url`; **lock/unlock**: approve → checkout, revise → checkin" | Matches our scope except we are explicitly deferring lock/unlock to M365. |
 | `docs/runbook/user-manual.md` (L46) | User manual already documents "Online Edit → iframe → Sync" UX | No change. |
@@ -93,26 +93,40 @@ com.lims.service.sharepoint
 
 ```java
 public interface SharePointClient {
-    boolean isEnabled();                                    // returns true for prod bean; mock always returns true in demo profile
+    /** True when the bean is willing to handle calls.
+     *  - GraphSharePointClient: always true once wired.
+     *  - MockSharePointClient: true only when {@code lims.demo.enabled=true}.
+     *  - NoOpSharePointClient: always false (any call throws {@link SharePointException}).
+     *  Callers (ReportService) use this to decide whether to attempt an upload at all.
+     */
+    boolean isEnabled();
 
     /** Upload the docx at localPath. If a driveItem with the same path already exists, Graph returns 409;
      *  we treat that as "already uploaded" and return the existing item rather than failing. */
-    SharePointUploadResult uploadDocx(String localPath, String driveRelativePath, String filename);
+    SharePointUploadResult uploadDocx(String localPath, SharePointPath path);
 
     /** Download the docx bytes for sharepointFileId. */
     byte[] downloadDocx(String sharepointFileId);
 
-    /** Compose the iframe-renderable edit URL. Graph impl returns driveItem.webUrl + "?action=edit".
-     *  Mock impl returns a stable in-memory URL. */
+    /** Compose the iframe-renderable edit URL. Graph impl returns driveItem.webUrl + the configured suffix.
+     *  Mock impl returns a stable in-memory URL prefixed with https://example.invalid/mock-sharepoint/.
+     *  NoOp impl throws {@link SharePointException}. */
     String composeEditUrl(String sharepointFileId);
 
     record SharePointUploadResult(String fileId, String editUrl) {}
 }
 ```
 
+Three implementations (§4.2.4 lists the conditional annotations):
+
+- `GraphSharePointClient` — production: real Graph drive upload/download.
+- `MockSharePointClient` — dev/demo: in-memory, reuses local MinIO content. Returns deterministic mock ids so unit tests are stable.
+- `NoOpSharePointClient` — neither demo nor prod wired: every method throws `SharePointException`. This is the only impl when both `azure.ad.enabled=false` and `lims.demo.enabled=false`.
+
 Failure modes:
 - `GraphSharePointClient` wraps every Graph failure in a new `SharePointException` (added in `lims-common`).
 - `MockSharePointClient` never throws on the happy path. `downloadDocx` re-reads from MinIO via the existing `FileStorageService`; if the local file is missing it throws `SharePointException` (matches the prod impl).
+- `NoOpSharePointClient` throws `SharePointException` on every method except `isEnabled()` (returns `false`).
 
 #### 4.2.2 `SharePointProperties`
 
@@ -157,13 +171,21 @@ The path strategy is hard-coded as enum-like; we do not parse arbitrary template
 
 Delegates auth to `MicrosoftGraphClient` (reusing `getAccessToken`). Three new methods, all `PUT` / `GET` against `https://graph.microsoft.com/v1.0`:
 
-- `uploadDocx(localPath, driveRelativePath, filename)`:
+- `uploadDocx(localPath, SharePointPath path)`:
   - Resolve drive id: if `properties.driveId()` is non-empty use it; else `GET /sites/{hostname}:/sites/{sitePath}?$select=id` → `GET /sites/{siteId}/drives?$filter=name eq '{library}'` → pick the first match.
-  - `PUT /drives/{driveId}/items/children/{filename}:` is the wrong endpoint. Correct: `PUT /drives/{driveId}/root:/{driveRelativePath}{filename}:/content` with `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Body is the docx bytes.
-  - On `409 Conflict` (item already exists), fall back to `GET /drives/{driveId}/root:/{path}{filename}` and return that driveItem.
-  - Return `SharePointUploadResult(driveItem.id, driveItem.webUrl + "?action=edit")`.
+  - Build the Graph path. `path.driveRelativePath()` ends with `/`; `path.filename()` does not. The full URL-encoded path segment is `{driveRelativePath}{filename}`, e.g. `Reports%2F2026%2F10%2FREQ-2026-0001_V1.0.docx`. We URL-encode each `/` and the filename as a single segment; the colon `:/content` is appended unencoded. Example request line:
+
+    ```
+    PUT https://graph.microsoft.com/v1.0/drives/{driveId}/root:/Reports/2026%2F10%2FREQ-2026-0001_V1.0.docx:/content
+    Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    Authorization: Bearer {accessToken}
+
+    <docx bytes>
+    ```
+  - On `409 Conflict` (item already exists), fall back to `GET /drives/{driveId}/root:/{driveRelativePath}{filename}` and return that driveItem's id + webUrl.
+  - Return `SharePointUploadResult(driveItem.id, driveItem.webUrl + properties.editUrlSuffix())`.
 - `downloadDocx(fileId)`: `GET /drives/{driveId}/items/{fileId}/content` with `Authorization: Bearer <token>`. Stream into `byte[]`. 4xx → `SharePointException`.
-- `composeEditUrl(fileId)`: `GET /drives/{driveId}/items/{fileId}?$select=webUrl`, return `webUrl + "?action=edit"`. We compose lazily so the URL stays valid even if the host's edit suffix policy changes (we can update in one place).
+- `composeEditUrl(fileId)`: `GET /drives/{driveId}/items/{fileId}?$select=webUrl`, return `webUrl + properties.editUrlSuffix()`. We compose lazily so the URL stays valid even if the host's edit suffix policy changes (we can update in one place).
 
 Concurrency-safe token: `MicrosoftGraphClient.getAccessToken()` is already `synchronized` and caches for ~60s before the token expiry. We reuse it as-is.
 
@@ -175,13 +197,14 @@ Three call sites change. The seam is always: **try the Graph call, on `SharePoin
 
 - `createReport(reqId, authorId)`:
   - After `fileStorageService.upload(docx, "reports/" + requestId)` succeeds and before `reportMapper.updateById(report)`:
-  - Call `sharePointClient.uploadDocx(docx.toString(), pathResolver.resolve(parent, report))`; on success, set `report.setSharepointFileId(...)` and `report.setSharepointEditUrl(...)` before the updateById.
+  - If `sharePointClient.isEnabled()`, call `sharePointClient.uploadDocx(docx.toString(), pathResolver.resolve(parent, report))`; on success, set `report.setSharepointFileId(...)` and `report.setSharepointEditUrl(...)` before the updateById.
   - Wrap in `try { ... } catch (SharePointException e) { log.warn("SharePoint upload failed (local report kept): {}", e.getMessage()); }`.
   - The mock bean always succeeds in `lims.demo.enabled=true`, so dev/demo UX matches prod.
 
 - `getEditUrl(reportId)`:
   - Currently returns `report.getSharepointEditUrl()` directly.
-  - Change to: if `report.getSharepointEditUrl()` is non-null, return `sharePointClient.composeEditUrl(report.getSharepointFileId())` (lets us lazily rebuild URLs if the suffix policy changes). If it is null, return null.
+  - Change to: if `report.getSharepointFileId()` is non-null, return `sharePointClient.composeEditUrl(report.getSharepointFileId())` (lets us lazily rebuild URLs if the suffix policy changes). Otherwise return null.
+  - For the NoOp impl (`isEnabled()==false`), `composeEditUrl` throws; we guard with `isEnabled()` and return null in that case.
 
 - `syncFromSharePoint(reportId)`:
   - Remove the `if (!demoEnabled)` `OPERATION_NOT_ALLOWED` throw.
@@ -193,7 +216,7 @@ Three call sites change. The seam is always: **try the Graph call, on `SharePoin
   - `reportMapper.updateById(report)`.
 
 - `reviseReport(reportId, revisionNote, userId)`:
-  - Same seam as `createReport`: after regenerating docx, call `sharePointClient.uploadDocx(...)` and update `sharepoint_file_id` / `sharepoint_edit_url`. Each revision is a new file (per the design decision matrix).
+  - Same seam as `createReport`: after regenerating docx, if `sharePointClient.isEnabled()`, call `sharePointClient.uploadDocx(...)` and update `sharepoint_file_id` / `sharepoint_edit_url`. Each revision is a new file (per the design decision matrix).
 
 The `demoEnabled` flag stays in `ReportService` for `getSampleWordBytes` (issue #84). The SharePoint switch is purely the `SharePointClient.isEnabled()` + bean selection; we do not read `demoEnabled` in `createReport`.
 
@@ -227,18 +250,26 @@ sharepoint:
   library: ${SHAREPOINT_LIBRARY:Documents}
   folder-root: ${SHAREPOINT_FOLDER_ROOT:Reports}
   drive-id: ${SHAREPOINT_DRIVE_ID:}
+  edit-url-suffix: ${SHAREPOINT_EDIT_URL_SUFFIX:?action=edit}
 ```
 
 In `application-dev.yml` we keep `sharepoint.enabled: false` (the mock bean handles dev UX) and explicit comment that `azure.ad.enabled: false` already implies Graph impl disabled.
 
-The `@ConditionalOnProperty` for `GraphSharePointClient` is:
+The conditional annotations:
 
 ```java
+// GraphSharePointClient
 @ConditionalOnProperty(name = "sharepoint.enabled", havingValue = "true")
 @ConditionalOnProperty(name = "azure.ad.enabled", havingValue = "true")
+
+// MockSharePointClient
+@ConditionalOnProperty(name = "lims.demo.enabled", havingValue = "true")
+
+// NoOpSharePointClient
+@ConditionalOnMissingBean(SharePointClient.class)
 ```
 
-`MockSharePointClient` is `@ConditionalOnMissingBean(SharePointClient.class)`.
+The three conditionals together guarantee exactly one `SharePointClient` bean in every profile.
 
 ### 4.5 Frontend changes
 
@@ -275,7 +306,7 @@ Today the action button grid calls `getReportEditUrl` then `window.open`. After:
 
 | Key | en-US | zh-CN |
 |---|---|---|
-| `report.edit.title` (existing; confirm present) | Edit Report | 编辑报告 |
+| `report.edit.title` | Edit Report | 编辑报告 |
 | `report.edit.unavailable` | SharePoint online edit is not configured in this environment. | 当前环境未配置 SharePoint 在线编辑。 |
 | `report.edit.mockHint` | Demo preview — your edits are not persisted to a real Microsoft 365 tenant. | 演示预览 — 编辑内容不会持久化到真实的 Microsoft 365 租户。 |
 | `report.detail.onlineEdit` | Online Edit | 在线编辑 |
@@ -290,7 +321,7 @@ Today the action button grid calls `getReportEditUrl` then `window.open`. After:
 | Graph `404 Not Found` (library/site mis-configured) | Same | Same. |
 | Graph `409 Conflict` on upload (file already exists) | Treated as success: fetch the existing driveItem and return its id | Same as success. |
 | Graph `5xx` | Same as 401 | Same. |
-| `sharepoint.enabled=false` (production with no integration) | `MockSharePointClient` is **not** loaded because `azure.ad.enabled=false` typically co-occurs; the bean selector uses `@ConditionalOnMissingBean`, so if neither bean matches, Spring fails to start. We add a fallback: a `NoOpSharePointClient` registered with `@ConditionalOnMissingBean(SharePointClient.class)` after the mock — returns null for `isEnabled`, throws `SharePointException` for any method call. | Local reports still generate; Online Edit button is disabled with the "not configured" tooltip. |
+| `sharepoint.enabled=false` (production with no integration) | When `azure.ad.enabled=false` and `lims.demo.enabled=false`, neither `GraphSharePointClient` nor `MockSharePointClient` matches. `NoOpSharePointClient` is registered with `@ConditionalOnMissingBean(SharePointClient.class)` and is the active bean. `isEnabled()` returns false; all other methods throw `SharePointException`. `ReportService.getEditUrl` short-circuits to `null`. | Local reports still generate; Online Edit button is disabled with the "not configured" tooltip. |
 | `downloadDocx` fails during sync | `SharePointException`, log warn, do **not** update `file_url`/`pdf_url`. The report row keeps its old URLs. | User can retry sync. |
 | Frontend gets `null` from `getReportEditUrl` | Frontend renders the new empty-state card | Clear UX. |
 
@@ -369,7 +400,7 @@ ReportService.createReport
   ├── fileStorageService.upload(docx, …)     // → report.fileUrl (existing)
   ├── SharePointPathResolver.resolve(parent, report)
   │     → SharePointPath("/Reports/2026/10/", "REQ-2026-0001_V1.0.docx")
-  ├── SharePointClient.uploadDocx(localPath, path, filename)
+  ├── SharePointClient.uploadDocx(localPath, SharePointPath)
   │     ├── Graph: PUT /drives/{driveId}/root:/Reports/2026/10/REQ-2026-0001_V1.0.docx:/content
   │     │   ↳ 201 { id, webUrl }
   │     └── report.setSharepointFileId(id); report.setSharepointEditUrl(webUrl + "?action=edit")
