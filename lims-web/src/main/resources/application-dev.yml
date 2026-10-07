@@ -76,6 +76,12 @@ minio:
 sharepoint:
   enabled: false
 
+# Enable the in-process demo mode so MockSharePointClient activates in dev
+# (gives the same UX as real M365 without Azure credentials; spec §4.1).
+lims:
+  demo:
+    enabled: true
+
 # External API (parts / suppliers master data)
 external:
   api:
